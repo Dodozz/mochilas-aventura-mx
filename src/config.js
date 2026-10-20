@@ -2,12 +2,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const raiz = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+// En Vercel el código es de solo lectura: solo /tmp se puede escribir (y se borra entre arranques en frío).
+const carpetaDatos = process.env.VERCEL ? '/tmp' : path.join(raiz, 'data');
 
 export const config = {
   raiz,
   puerto: Number(process.env.PORT || 3000),
-  rutaBD: process.env.DB_PATH || path.join(raiz, 'data', 'mochilas.db'),
-  carpetaSubidas: path.join(raiz, 'data', 'subidas'),
+  rutaBD: process.env.DB_PATH || path.join(carpetaDatos, 'mochilas.db'),
+  carpetaSubidas: path.join(carpetaDatos, 'subidas'),
   produccion: process.env.NODE_ENV === 'production',
   // Correo real (opcional). Sin SMTP_HOST los correos se simulan: se guardan en la tabla `correos`
   // y se pueden ver en el panel de administración → "Correos".
