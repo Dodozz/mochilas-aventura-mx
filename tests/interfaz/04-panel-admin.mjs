@@ -1,0 +1,81 @@
+import { abrir, ir, q, qa, txt, chk, resumen, wait, esperar, escribir, clic } from './ayuda.mjs';
+const llenar = (w, f, d) => { for (const [k, v] of Object.entries(d)) { const el = f.querySelector(`[name=${k}]`); if (el.type === 'checkbox') { el.checked = v; el.dispatchEvent(new w.Event('change', { bubbles: true })); } else escribir(w, el, v); } };
+const enviar = async (w, f, ms = 800) => { f.dispatchEvent(new w.Event('submit', { bubbles: true, cancelable: true })); await wait(ms); };
+
+console.log('ACCESO DENEGADO a cliente'); let w = await abrir('/login');
+let f = q(w, '#contenido form'); llenar(w, f, { correo: 'elizabeth.navarro@example.com', password: 'Cliente2026' }); await enviar(w, f); await esperar(w);
+await ir(w, '/admin/pedidos');
+chk(txt(w, 'h1') === 'Acceso denegado', 'cliente no entra al panel');
+chk(!q(w, '.admin-lat'), 'sin menú de administración');
+// salir
+await ir(w, '/'); clic(w, q(w, '#btn-cuenta')); clic(w, q(w, '#btn-salir')); await wait(800);
+
+console.log('LOGIN ADMIN'); await ir(w, '/login');
+f = q(w, '#contenido form'); llenar(w, f, { correo: 'admin@mochilasaventuramx.com', password: 'Admin2026' }); await enviar(w, f); await esperar(w);
+chk(w.location.pathname === '/admin/pedidos', `admin va al panel (${w.location.pathname})`);
+chk(qa(w, '.admin-lat a').length >= 9, 'menú lateral');
+chk(qa(w, '.kpi').length === 3, '3 tarjetas de resumen');
+chk(txt(w, '.kpi .n') === '2', `pedidos nuevos = 2 (${txt(w, '.kpi .n')})`);
+chk(qa(w, '#tb tr[data-id]').length === 4, '4 pedidos en la tabla');
+chk(qa(w, '#tb .pill.p-nuevo').length === 2, 'etiqueta "Pedido nuevo" en 2');
+console.log('FILTROS'); escribir(w, q(w, '#fe'), 'entregado'); await wait(600);
+chk(qa(w, '#tb tr[data-id]').length === 1, 'filtro por estatus entregado');
+escribir(w, q(w, '#fe'), ''); escribir(w, q(w, '#ff'), 'hoy'); await wait(600);
+chk(qa(w, '#tb tr[data-id]').length === 2, `filtro "hoy" = 2 (${qa(w, '#tb tr[data-id]').length})`);
+escribir(w, q(w, '#ff'), ''); escribir(w, q(w, '#fq'), 'PED-000002'); await wait(900);
+chk(qa(w, '#tb tr[data-id]').length === 1, 'búsqueda por folio');
+escribir(w, q(w, '#fq'), ''); await wait(900);
+
+console.log('DETALLE PEDIDO'); const nuevo = qa(w, '#tb tr[data-id]').find((r) => r.textContent.includes('Pedido nuevo')); clic(w, nuevo); await esperar(w);
+chk(txt(w, 'h1').startsWith('Detalle del Pedido PED-'), 'detalle del pedido');
+chk(txt(w, '.zona-box').includes('Ciudad de México'), 'zona de envío');
+chk(txt(w, '.detalle-adm').includes('Calle del Bosque'), 'dirección y referencias');
+f = q(w, '#f-est'); llenar(w, f, { estatus: 'enviado', numero_guia: '' }); await enviar(w, f, 500);
+chk(txt(w, '#f-est .error').includes('Obligatorio'), 'guía obligatoria al enviar');
+llenar(w, f, { numero_guia: 'MXG-98765' }); await enviar(w, f, 1000);
+chk(txt(w, '.hist').includes('Enviado') && txt(w, '.hist').includes('Guía: MXG-98765'), 'historial con guía');
+await ir(w, '/admin/pedidos');
+chk(txt(w, '.kpi .n') === '1', 'contador de nuevos bajó a 1');
+
+console.log('CATÁLOGO'); await ir(w, '/admin/catalogo');
+chk(qa(w, '.tabla tbody tr').length === 8, '8 mochilas');
+chk(qa(w, '.estrella-btn.on').length === 4, '4 destacadas');
+f = q(w, '#f-prod'); await enviar(w, f, 300);
+chk(qa(w, '.panel-form .campo.con-error').length >= 7, `validación del alta (${qa(w, '.panel-form .campo.con-error').length} errores)`);
+llenar(w, f, { codigo: 'JU-003', nombre: 'Mochila Montaña Pro', categoria_id: '2', descripcion: 'Mochila de montaña', material: 'Nailon', largo: '35', alto: '55', ancho: '20', precio: '12.999', existencias: '4', umbral: '5' });
+q(w, '#col-nom').value = 'Verde'; clic(w, q(w, '#col-add')); await enviar(w, f, 300);
+chk(txt(w, '.panel-form').includes('máximo 2 decimales'), 'precio con 3 decimales rechazado');
+llenar(w, f, { precio: '1299.90' }); await enviar(w, f, 1200); await esperar(w);
+chk(qa(w, '.tabla tbody tr').length === 9, 'mochila agregada (9)');
+chk(txt(w, '.tabla').includes('Mochila Montaña Pro') && txt(w, '.tabla').includes('$1,299.90'), 'aparece con su precio');
+clic(w, qa(w, '[data-edit]')[8]); await wait(200);
+chk(q(w, '[name=codigo]').value === 'JU-003' && txt(w, '#t-form').includes('Editar'), 'modo edición');
+llenar(w, q(w, '#f-prod'), { codigo: 'IN-001' }); await enviar(w, q(w, '#f-prod'), 600);
+chk(txt(w, '.panel-form').includes('Ya existe una mochila con ese código'), 'código único');
+
+console.log('INVENTARIO'); await ir(w, '/admin/inventario');
+chk(qa(w, '.alerta-inv').length === 3, `alertas: Espacial, Antirrobo y la nueva (${qa(w, '.alerta-inv').length})`);
+chk(txt(w, '.alerta-inv').includes('Antirrobo') || qa(w, '.alerta-inv').some((a) => a.textContent.includes('agotado')), 'alerta de agotado');
+f = q(w, '#f-ent'); llenar(w, f, { cantidad: '0' }); await enviar(w, f, 300);
+chk(!!q(w, '#f-ent .error'), 'entrada con 0 rechazada');
+const sel = q(w, '#mod'); sel.value = [...sel.options].find((o) => o.textContent.includes('Espacial')).value;
+llenar(w, f, { cantidad: '10' }); await enviar(w, f, 1000);
+chk(qa(w, '.alerta-inv').length === 2, 'la alerta de Espacial se quitó al superar el umbral');
+chk(txt(w, '.tabla').includes('+10'), 'movimiento registrado en la bitácora');
+
+console.log('DEVOLUCIONES / RESEÑAS / CONFIG / CORREOS'); await ir(w, '/admin/devoluciones');
+chk(qa(w, '.tabla tbody tr').length >= 1, 'lista de devoluciones');
+await ir(w, '/admin/resenas'); chk(qa(w, '.tabla tbody tr').length === 10, '10 reseñas');
+clic(w, q(w, '[data-alt]')); await wait(600); chk(qa(w, '.tabla tbody tr button').some((b) => b.textContent === 'Mostrar'), 'reseña oculta');
+await ir(w, '/admin/configuracion');
+chk(qa(w, '.config-cards .tarjeta').length === 3, 'zonas, envío gratis, límites');
+chk(q(w, '[name=envio_gratis_desde]').value === '999', 'envío gratis $999');
+chk(txt(w, '#cat-panel').includes('Infantil') && txt(w, '#cat-panel').includes('Accesorios'), 'categorías en configuración');
+f = q(w, '#f-conf'); llenar(w, f, { limite_modelo: '0' }); await enviar(w, f, 500);
+chk(!!q(w, '#f-conf .con-error'), 'límite 0 rechazado');
+llenar(w, f, { limite_modelo: '10', envio_gratis_desde: '899' }); await enviar(w, f, 800);
+chk(txt(w, '#toasts').includes('Configuración guardada'), 'configuración guardada');
+await ir(w, '/admin/correos');
+chk(qa(w, '.tabla tbody tr').length >= 1, `correos simulados (${qa(w, '.tabla tbody tr').length})`);
+await ir(w, '/admin/categorias'); chk(qa(w, '.tabla tbody tr').length === 3, '3 categorías');
+resumen();
