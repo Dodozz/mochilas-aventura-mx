@@ -56,7 +56,10 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ mensaje: 'Ocurrió un error inesperado. Inténtalo de nuevo en unos minutos.' });
 });
 
-if (process.env.NODE_ENV !== 'test') {
+// En Vercel la plataforma recibe las peticiones con la app exportada; no hay que escuchar un puerto.
+export default app;
+
+if (process.env.NODE_ENV !== 'test' && !process.env.VERCEL) {
   app.listen(config.puerto, () => {
     console.log(`\n  Mochilas Aventura MX listo →  http://localhost:${config.puerto}`);
     console.log('  Administrador:  admin@mochilasaventuramx.com / Admin2026');
