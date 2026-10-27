@@ -67,10 +67,31 @@ const USOS = [
   ['D01', 'Honorarios médicos, dentales y gastos hospitalarios'], ['S01', 'Sin efectos fiscales'], ['CP01', 'Pagos'],
 ];
 
+const hayUsuarios = () => db.prepare('SELECT COUNT(*) n FROM usuarios').get().n > 0;
+
+/** Contraseñas de los usuarios de prueba (bcrypt es lento: se calcula ANTES de bloquear la base de datos). */
+function hashesDePrueba() {
+  return {
+    admin: hashPassword(USUARIOS_PRUEBA.admin.password),
+    cliente: hashPassword(USUARIOS_PRUEBA.cliente.password),
+    demo: hashPassword('Cliente2026'),
+  };
+}
+
+/**
+ * Primera ejecución: carga los datos de ejemplo.
+ * En Vercel pueden arrancar VARIAS copias del servidor al mismo tiempo sobre la misma base de datos de /tmp
+ * (después de cada despliegue o cuando el sitio se reactiva). Antes, todas veían la base vacía, todas intentaban
+ * sembrar y todas menos una se caían al arrancar (UNIQUE constraint failed) → error FUNCTION_INVOCATION_FAILED.
+ * Ahora la revisión se repite DENTRO de una transacción IMMEDIATE (una sola copia a la vez puede escribir):
+ * la primera siembra y las demás esperan, encuentran los datos y siguen sin error.
+ */
 export function sembrarSiVacio() {
-  const { n } = db.prepare('SELECT COUNT(*) n FROM usuarios').get();
-  if (n === 0) sembrar();
-  else actualizarCatalogoBase();
+  if (!hayUsuarios()) {
+    const hashes = hashesDePrueba();
+    transaccion(() => { if (!hayUsuarios()) sembrar(hashes); });
+  }
+  actualizarCatalogoBase();
 }
 
 /**
@@ -108,7 +129,7 @@ export function actualizarCatalogoBase() {
   });
 }
 
-export function sembrar() {
+export function sembrar(hashes = hashesDePrueba()) {
   transaccion(() => {
     // ---- Configuración de la tienda (Anexo: contacto y redes; RF-18 CA8)
     const cfg = {
@@ -159,12 +180,12 @@ export function sembrar() {
 
     // ---- Usuarios
     const insU = db.prepare('INSERT INTO usuarios(nombres,apellido_paterno,apellido_materno,correo,password_hash,telefono,rol,acepto_privacidad,creado_en) VALUES(?,?,?,?,?,?,?,1,?)');
-    insU.run('Administrador', 'Mochilas', 'Aventura', USUARIOS_PRUEBA.admin.correo, hashPassword(USUARIOS_PRUEBA.admin.password), null, 'administrador', hace(90));
-    const cli = insU.run('Elizabeth', 'Navarro', 'Duarte', USUARIOS_PRUEBA.cliente.correo, hashPassword(USUARIOS_PRUEBA.cliente.password), '5512345678', 'cliente', hace(60)).lastInsertRowid;
+    insU.run('Administrador', 'Mochilas', 'Aventura', USUARIOS_PRUEBA.admin.correo, hashes.admin, null, 'administrador', hace(90));
+    const cli = insU.run('Elizabeth', 'Navarro', 'Duarte', USUARIOS_PRUEBA.cliente.correo, hashes.cliente, '5512345678', 'cliente', hace(60)).lastInsertRowid;
     const demo = [
       ['Mariana', 'Gómez', 'Ruiz'], ['Luis', 'Herrera', 'Soto'], ['Sofía', 'Castillo', 'Pérez'],
       ['Carlos', 'Rivas', 'Mena'], ['Ana', 'Torres', 'Vega'],
-    ].map(([n, a, m], i) => Number(insU.run(n, a, m, `cliente${i + 1}@example.com`, hashPassword('Cliente2026'), null, 'cliente', hace(80 - i)).lastInsertRowid));
+    ].map(([n, a, m], i) => Number(insU.run(n, a, m, `cliente${i + 1}@example.com`, hashes.demo, null, 'cliente', hace(80 - i)).lastInsertRowid));
 
     // ---- Dirección del cliente de prueba
     const edo = db.prepare("SELECT id FROM estados WHERE clave = '09'").get().id;

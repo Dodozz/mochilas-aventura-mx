@@ -6,10 +6,12 @@ import { config } from './config.js';
 fs.mkdirSync(path.dirname(config.rutaBD), { recursive: true });
 fs.mkdirSync(config.carpetaSubidas, { recursive: true });
 
-export const db = new Database(config.rutaBD);
+// timeout: si otra copia del servidor está escribiendo (p. ej. sembrando al arrancar en Vercel), se espera hasta 20 s
+// en lugar de fallar de inmediato con SQLITE_BUSY.
+export const db = new Database(config.rutaBD, { timeout: 20000 });
+db.pragma('busy_timeout = 20000');
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
-db.pragma('busy_timeout = 5000');
 
 // ---------------------------------------------------------------------
 // Esquema relacional (RNF-4 CA1). Una sola fuente de verdad para tienda y panel.

@@ -61,6 +61,14 @@ escribir(w, correo, 'malo@correo.com');
 const priv = q(w, '#f-priv'); priv.checked = true; priv.dispatchEvent(new w.Event('change', { bubbles: true }));
 chk(!errorDe(w, 'correo') && !priv.closest('.campo').querySelector('.error'), 'ambos errores se quitan al corregirlos');
 
+console.log('ENCABEZADO FIJO');
+chk(/#encabezado \{ display: contents; \}/.test(css) && /\.encabezado \{[^}]*position: sticky; top: 0;/.test(css), 'el encabezado se queda pegado arriba al bajar (sticky sin contenedor que lo limite)');
+await ir(w, '/');
+clic(w, q(w, '#btn-menu'));
+chk(q(w, '#nav-principal').classList.contains('abierto'), 'menú del celular abierto');
+await ir(w, '/catalogo?categoria=2');
+chk(!q(w, '#nav-principal').classList.contains('abierto') && q(w, '#btn-menu').getAttribute('aria-expanded') === 'false', 'al cambiar de pantalla el menú se cierra solo');
+
 console.log('INICIO DE SESIÓN');
 await ir(w, '/login');
 const fl = q(w, '#contenido form');
