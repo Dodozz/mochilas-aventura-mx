@@ -1,5 +1,6 @@
 import { db, aPesos, configNum, ErrorApi, ahora, aCentavos } from '../db.js';
 import { validarComentario } from '../validadores.js';
+import { buscar } from '../buscador.js';
 
 const BASE = `
   SELECT p.*, c.nombre AS categoria,
@@ -8,10 +9,19 @@ const BASE = `
          (SELECT COUNT(*) FROM resenas r WHERE r.producto_id = p.id AND r.oculta = 0) AS total_resenas
     FROM productos p JOIN categorias c ON c.id = p.categoria_id`;
 
+/** Primera oración de la descripción (la que se muestra en las tarjetas del catálogo). */
+export function resumir(texto = '') {
+  const t = String(texto || '').trim();
+  const m = /^(.+?[.!?])(\s|$)/s.exec(t);
+  const frase = (m ? m[1] : t).trim();
+  return frase.length > 160 ? `${frase.slice(0, 157).replace(/\s+\S*$/, '')}…` : frase;
+}
+
 export function formatear(p, favoritos = new Set()) {
   const colores = db.prepare('SELECT nombre, hex, foto FROM producto_colores WHERE producto_id = ? ORDER BY id').all(p.id);
   return {
     id: p.id, codigo: p.codigo, nombre: p.nombre, categoria: p.categoria, categoria_id: p.categoria_id, coleccion: p.coleccion,
+    resumen: resumir(p.descripcion),
     precio: aPesos(p.precio), existencias: p.existencias, umbral: p.umbral,
     agotado: p.existencias === 0,
     pocas_piezas: p.existencias > 0 && p.existencias <= p.umbral,   // RN-3
@@ -26,38 +36,70 @@ export function formatear(p, favoritos = new Set()) {
 const favoritosDe = (usuarioId) =>
   new Set(usuarioId ? db.prepare('SELECT producto_id FROM favoritos WHERE usuario_id = ?').all(usuarioId).map((f) => f.producto_id) : []);
 
-/** RF-4 CA1 — búsqueda por nombre; filtros por categoría, rango de precio y disponibilidad. */
+/**
+ * RF-4 CA1 — búsqueda y filtros por categoría, rango de precio y disponibilidad.
+ * La búsqueda por texto usa el buscador inteligente (src/buscador.js): nombre, descripción, categoría, colores,
+ * sinónimos, errores de tecleo y orden por relevancia.
+ */
 export function listarCatalogo(q, usuarioId) {
   const donde = ["p.estatus = 'activo'", "c.estatus = 'activa'"];
   const par = [];
-  const texto = String(q.q || '').trim();
-  if (texto) {
-    donde.push('(p.nombre LIKE ? OR p.codigo LIKE ? OR IFNULL(p.coleccion, \'\') LIKE ?)');
-    par.push(`%${texto}%`, `%${texto}%`, `%${texto}%`);
-  }
+  const texto = String(q.q || '').trim().slice(0, 120);
   const cats = String(q.categoria || '').split(',').map(Number).filter(Boolean);
   if (cats.length) { donde.push(`p.categoria_id IN (${cats.map(() => '?').join(',')})`); par.push(...cats); }
   if (q.min !== undefined && q.min !== '' && !Number.isNaN(Number(q.min))) { donde.push('p.precio >= ?'); par.push(aCentavos(Math.max(0, Number(q.min)))); }
   if (q.max !== undefined && q.max !== '' && !Number.isNaN(Number(q.max))) { donde.push('p.precio <= ?'); par.push(aCentavos(Number(q.max))); }
   if (q.disponibles === '1' || q.disponibles === 'true') donde.push('p.existencias > 0');
 
-  const orden = {
+  const ORDENES = {
     precio_asc: 'p.precio ASC, p.nombre',
     precio_desc: 'p.precio DESC, p.nombre',
     nuevo: 'p.creado_en DESC, p.id DESC',
-  }[q.orden] || '(p.existencias > 0) DESC, p.destacada DESC, p.nombre';
-
-  const total = db.prepare(`SELECT COUNT(*) n FROM productos p JOIN categorias c ON c.id = p.categoria_id WHERE ${donde.join(' AND ')}`).get(...par).n;
+  };
+  const ordenBase = '(p.existencias > 0) DESC, p.destacada DESC, p.nombre';
   const porPagina = Math.min(Math.max(Number(q.por_pagina) || 9, 1), 48);
-  const paginas = Math.max(1, Math.ceil(total / porPagina));
-  const pagina = Math.min(Math.max(Number(q.pagina) || 1, 1), paginas);
-  const filas = db.prepare(`${BASE} WHERE ${donde.join(' AND ')} ORDER BY ${orden} LIMIT ? OFFSET ?`).all(...par, porPagina, (pagina - 1) * porPagina);
   const fav = favoritosDe(usuarioId);
   const rango = db.prepare(`SELECT MIN(p.precio) mn, MAX(p.precio) mx FROM productos p JOIN categorias c ON c.id = p.categoria_id WHERE p.estatus='activo' AND c.estatus='activa'`).get();
-  return {
-    productos: filas.map((f) => formatear(f, fav)), total, pagina, paginas,
-    rango: { min: Math.floor(aPesos(rango.mn || 0)), max: Math.ceil(aPesos(rango.mx || 0)) },
+  const rangoPesos = { min: Math.floor(aPesos(rango.mn || 0)), max: Math.ceil(aPesos(rango.mx || 0)) };
+  const paginar = (total, pagina0) => {
+    const paginas = Math.max(1, Math.ceil(total / porPagina));
+    return { paginas, pagina: Math.min(Math.max(Number(pagina0) || 1, 1), paginas) };
   };
+
+  if (!texto) {
+    const orden = ORDENES[q.orden] || ordenBase;
+    const total = db.prepare(`SELECT COUNT(*) n FROM productos p JOIN categorias c ON c.id = p.categoria_id WHERE ${donde.join(' AND ')}`).get(...par).n;
+    const { paginas, pagina } = paginar(total, q.pagina);
+    const filas = db.prepare(`${BASE} WHERE ${donde.join(' AND ')} ORDER BY ${orden} LIMIT ? OFFSET ?`).all(...par, porPagina, (pagina - 1) * porPagina);
+    return { productos: filas.map((f) => formatear(f, fav)), total, pagina, paginas, rango: rangoPesos };
+  }
+
+  // Con texto: se buscan todos los que pasan los filtros y se ordenan por relevancia (el catálogo es pequeño;
+  // aun con miles de productos esto toma milisegundos).
+  const filas = db.prepare(`${BASE} WHERE ${donde.join(' AND ')} ORDER BY ${ordenBase}`).all(...par);
+  const colores = new Map();
+  for (const c of db.prepare('SELECT producto_id, nombre FROM producto_colores ORDER BY id').all()) {
+    if (!colores.has(c.producto_id)) colores.set(c.producto_id, []);
+    colores.get(c.producto_id).push(c.nombre);
+  }
+  const { resultados, info } = buscar(texto, filas.map((f) => ({
+    id: f.id, codigo: f.codigo, nombre: f.nombre, categoria: f.categoria, coleccion: f.coleccion, material: f.material,
+    descripcion: f.descripcion, colores: colores.get(f.id) || [], precio: aPesos(f.precio),
+  })));
+  const puntos = new Map(resultados.map((r) => [r.id, r.puntos]));
+  const posicionBase = new Map(filas.map((f, i) => [f.id, i]));
+  let encontrados = info.sin_criterio ? filas : filas.filter((f) => puntos.has(f.id));
+  const orden = q.orden || info.orden; // el orden elegido manda; si no, "barata" ordena por precio
+  if (orden === 'precio_asc') encontrados.sort((a, b) => a.precio - b.precio || a.nombre.localeCompare(b.nombre));
+  else if (orden === 'precio_desc') encontrados.sort((a, b) => b.precio - a.precio || a.nombre.localeCompare(b.nombre));
+  else if (orden === 'nuevo') encontrados.sort((a, b) => String(b.creado_en).localeCompare(String(a.creado_en)) || b.id - a.id);
+  else encontrados.sort((a, b) => (puntos.get(b.id) || 0) - (puntos.get(a.id) || 0) || posicionBase.get(a.id) - posicionBase.get(b.id));
+
+  const total = encontrados.length;
+  const { paginas, pagina } = paginar(total, q.pagina);
+  encontrados = encontrados.slice((pagina - 1) * porPagina, pagina * porPagina);
+  const { sin_criterio: _s, ...busqueda } = info;
+  return { productos: encontrados.map((f) => formatear(f, fav)), total, pagina, paginas, rango: rangoPesos, busqueda };
 }
 
 /** RF-3 CA1 / RF-11 — solo las marcadas por el administrador; nunca agotadas ni ocultas (CA3). */

@@ -14,7 +14,7 @@ chk(txt(w, '#v-min') === '$99' && txt(w, '#v-max') === '$799', `rango de precio 
 escribir(w, q(w, '#f-q'), 'dino'); await wait(900);
 chk(qa(w, '#resultado .prod').length === 1, 'búsqueda "dino" → 1 resultado');
 console.log('DETALLE'); await ir(w, '/producto/3');
-chk(txt(w, 'h1').startsWith('Dinos'), 'detalle Dinos');
+chk(txt(w, 'h1').startsWith('Mochila verde de dinosaurios'), 'detalle de la mochila de dinosaurios');
 chk(qa(w, '.swatch').length === 2, '2 colores');
 chk(txt(w, '.precio-g').includes('$599') && txt(w, '.precio-g').includes('IVA incluido'), 'precio con IVA incluido');
 chk(qa(w, '.resena').length === 4, '4 reseñas');
@@ -30,7 +30,7 @@ chk(inp.value === '1', 'cero → 1');
 escribir(w, inp, '99'); inp.dispatchEvent(new w.Event('blur')); await wait(100);
 chk(inp.value === '10', `99 → máximo 10 (${inp.value})`);
 await ir(w, '/carrito');
-chk(txt(w, '.linea h3') === 'Dinos', 'línea en el carrito');
+chk(txt(w, '.linea h3') === 'Mochila verde de dinosaurios', 'línea en el carrito');
 chk(txt(w, '.envio-barra').includes('$400.00'), `aviso envío gratis: ${txt(w, '.envio-barra')}`);
 chk(txt(w, '.resumen .total') .includes('$599.00'), 'total $599.00');
 chk(txt(w, '.resumen').includes('$82.62'), 'IVA incluido $82.62');

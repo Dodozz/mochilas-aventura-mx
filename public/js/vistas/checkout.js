@@ -1,4 +1,4 @@
-import { estado, esc, $, $$, ico, get, post, moneda, precio, toast, errorToast, errorCampo, marcarErrores } from '../util.js';
+import { estado, esc, $, $$, ico, get, post, moneda, precio, toast, errorToast, errorCampo, marcarErrores, validarEnVivo } from '../util.js';
 import { formDireccion, activarDireccion, leerDireccion, validarFormDireccion, textoDireccion } from '../direccion.js';
 import { validarDatosTarjeta, validarTarjeta, validarVencimiento, validarCVV, soloDigitos } from '../validators.js';
 
@@ -109,7 +109,7 @@ async function pago(ctx, dirs, base) {
   $('#numero').addEventListener('input', (e) => { const d = e.target.value.replace(/\D/g, '').slice(0, 16); e.target.value = d.replace(/(.{4})/g, '$1 ').trim(); refrescarBtn(); });
   $('#vencimiento').addEventListener('input', (e) => { let d = e.target.value.replace(/\D/g, '').slice(0, 4); if (d.length >= 3) d = d.slice(0, 2) + '/' + d.slice(2); e.target.value = d; refrescarBtn(); });
   $('#cvv').addEventListener('input', (e) => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4); refrescarBtn(); });
-  for (const k of Object.keys(validadores)) $('#' + k).addEventListener('blur', () => errorCampo($('#' + k).closest('.campo'), validadores[k]()));
+  for (const k of Object.keys(validadores)) validarEnVivo($('#' + k), validadores[k]);
   $('#politicas').addEventListener('change', () => { errorCampo($('#campo-pol'), $('#politicas').checked ? '' : 'Debes aceptar las políticas de la tienda para pagar.'); refrescarBtn(); });
 
   let enviando = false;

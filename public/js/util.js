@@ -139,6 +139,29 @@ export function errorCampo(campo, msg) {
   campo.classList.toggle('con-error', !!msg); $('.error', campo)?.remove();
   if (msg) campo.insertAdjacentHTML('beforeend', `<span class="error" role="alert">${esc(msg)}</span>`);
 }
+/**
+ * Validación de un campo mientras se escribe: se valida al salir del campo y, si ya muestra un error, se vuelve a
+ * revisar con cada tecla. Así el mensaje rojo desaparece EN EL MOMENTO en que el dato queda bien (por ejemplo, al
+ * escribir la @ que le faltaba al correo) sin esperar a salir del campo ni a enviar el formulario.
+ * `fn(valor)` regresa el mensaje de error o null.
+ */
+export function validarEnVivo(el, fn) {
+  const campo = el?.closest('.campo'); if (!campo) return;
+  // Al salir del campo solo se valida si la persona escribió algo: pasar con Tab por un campo vacío no lo marca en
+  // rojo (los vacíos se señalan al enviar el formulario).
+  let tocado = !!el.value;
+  el.addEventListener('blur', () => { if (tocado || campo.classList.contains('con-error')) errorCampo(campo, fn(el.value)); });
+  el.addEventListener('input', () => { tocado = true; });
+  const revisar = () => {
+    if (!campo.classList.contains('con-error')) return;
+    const msg = fn(el.value);
+    if (!msg) { errorCampo(campo, null); return; }
+    const span = $('.error', campo); // mismo error: no se reescribe para no repetir el aviso a lectores de pantalla
+    if (span && span.textContent !== msg && !span.querySelector('a')) span.textContent = msg;
+  };
+  el.addEventListener('input', revisar);
+  el.addEventListener('change', revisar);
+}
 export const datosForm = (form) => Object.fromEntries(new FormData(form).entries());
 
 export function ojoPassword(raiz) {
@@ -194,13 +217,14 @@ export function tarjetaProducto(p) {
   const color0 = p.colores[0];
   return `<article class="prod ${p.agotado ? 'agotado' : ''}" data-id="${p.id}">
     <a class="img" href="/producto/${p.id}" data-link aria-label="Ver ${esc(p.nombre)}">
-      <img src="${esc(color0?.foto || p.imagen)}" alt="Mochila ${esc(p.nombre)}" loading="lazy" data-foto>
+      <img src="${esc(color0?.foto || p.imagen)}" alt="${esc(p.nombre)}" loading="lazy" data-foto>
       ${etiquetaStock(p)}
     </a>
     <button class="corazon ${p.favorito ? 'on' : ''}" data-fav="${p.id}" aria-pressed="${p.favorito}" aria-label="${p.favorito ? 'Quitar de favoritos' : 'Guardar en favoritos'}">${ico('corazon')}</button>
     <div class="cuerpo">
       ${p.total_resenas ? `<span>${estrellas(p.promedio)}</span>` : '<span class="muted" style="font-size:.85rem">Sin reseñas aún</span>'}
       <a class="nombre" href="/producto/${p.id}" data-link>${esc(p.nombre)}</a>
+      ${p.resumen ? `<p class="resumen">${esc(p.resumen)}</p>` : ''}
       <span class="precio">${precio(p.precio)}</span>
       <div class="puntos" role="group" aria-label="Colores">${p.colores.map((c, i) => `<button type="button" class="punto ${i === 0 ? 'sel' : ''}" style="background:${esc(c.hex)}" data-color="${esc(c.nombre)}" data-foto="${esc(c.foto || '')}" title="${esc(c.nombre)}" aria-label="Color ${esc(c.nombre)}"></button>`).join('')}</div>
       <button class="btn block" data-agregar="${p.id}" ${p.agotado ? 'disabled' : ''}>${p.agotado ? 'Agotado' : `Agregar al carrito ${ico('carrito')}`}</button>

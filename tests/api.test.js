@@ -157,7 +157,7 @@ test('Pago aprobado: pedido con folio, stock descontado, bitácora, correos, car
   assert.ok(db.prepare("SELECT 1 FROM correos WHERE para = 'admin@mochilasaventuramx.com' AND asunto LIKE ?").get(`%${r.datos.folio}%`), 'aviso al administrador');
   assert.equal((await n.get('/carrito')).datos.piezas, 0);
 
-  // Envío gratis: 2 Rosa Floral = $1,298 ≥ $999
+  // Envío gratis: 2 mochilas rosas de flores = $1,298 ≥ $999
   await n.post('/carrito', { producto_id: prod('IN-001').id, color: 'Rosa', cantidad: 2 });
   assert.equal((await n.get(`/checkout/resumen?estado_id=${jal}`)).datos.envio.costo, 0);
 });
@@ -222,7 +222,7 @@ test('RF-10 / RN-8: solo reseña o da like quien recibió la mochila; una reseñ
   const resena = db.prepare('SELECT id FROM resenas WHERE producto_id = ?').get(dino.id);
   assert.equal((await n.post(`/resenas/${resena.id}/like`)).estado, 403);
 
-  // Elizabeth (cliente de prueba) tiene PED-000001 entregado de Dinos
+  // Elizabeth (cliente de prueba) tiene PED-000001 entregado de la mochila de dinosaurios
   const e = navegador();
   await e.post('/auth/login', { correo: 'elizabeth.navarro@example.com', password: 'Cliente2026' });
   assert.equal((await e.get(`/productos/${dino.id}`)).datos.puede_resenar, true);
@@ -333,4 +333,82 @@ test('RF-7 / RN-16: estados y municipios guardados en la BD', async () => {
   assert.equal(mal.estado, 422); // municipio de otro estado
   assert.equal((await c.post('/cuenta/direcciones', { ...DIR(), referencias: 'x'.repeat(201) })).estado, 422);
   assert.equal((await c.post('/cuenta/direcciones', DIR())).estado, 201);
+});
+
+// ------------------------------------------------------------------ Buscador inteligente y nombres descriptivos
+test('Productos: nombres descriptivos, descripción y resumen en el listado', async () => {
+  const n = navegador();
+  const { productos } = (await n.get('/productos?por_pagina=48')).datos;
+  const nombres = productos.map((p) => p.nombre);
+  assert.ok(nombres.includes('Mochila verde de dinosaurios') && nombres.includes('Lonchera térmica escolar'));
+  for (const p of productos) {
+    assert.match(p.nombre, /^(Mochila|Lonchera|Estuche) /, `el nombre dice qué es: ${p.nombre}`);
+    assert.ok(p.resumen && p.resumen.length > 20, `resumen de ${p.nombre}`);
+  }
+  const dino = productos.find((p) => p.codigo === 'IN-003');
+  assert.equal(dino.colores[0].nombre, 'Verde'); // el primer color coincide con su foto
+  assert.match((await n.get(`/productos/${dino.id}`)).datos.descripcion, /dinosaurios/);
+});
+
+test('Buscador: descripción, sinónimos, errores de tecleo, exclusiones y precios', async () => {
+  const n = navegador();
+  const buscarApi = async (q) => (await n.get(`/productos?por_pagina=48&q=${encodeURIComponent(q)}`)).datos;
+  const codigos = async (q) => (await buscarApi(q)).productos.map((p) => p.codigo).sort();
+
+  assert.deepEqual(await codigos('mochila azul'), ['IN-003', 'IN-004', 'JU-002']);       // solo mochilas con color azul
+  assert.deepEqual(await codigos('MOCHILAS'), ['IN-001', 'IN-002', 'IN-003', 'IN-004', 'JU-001', 'JU-002']); // sin el estuche
+  assert.deepEqual(await codigos('Lápices'), ['AC-002']);                                // acentos y plural
+  assert.deepEqual(await codigos('para la compu'), ['JU-001', 'JU-002']);                // sinónimo + descripción
+  assert.deepEqual(await codigos('con rueditas para niña'), ['IN-002', 'IN-004']);
+  assert.deepEqual(await codigos('astronauta'), ['IN-004']);                             // solo aparece en la descripción
+  assert.deepEqual(await codigos('mochila sin ruedas'), ['IN-001', 'IN-003', 'JU-001', 'JU-002']);
+  assert.deepEqual(await codigos('mochila menos de $600'), ['IN-003', 'JU-001']);
+  assert.deepEqual(await codigos('in-003'), ['IN-003']);
+
+  const tecleo = await buscarApi('dinosuario');
+  assert.deepEqual(tecleo.productos.map((p) => p.codigo), ['IN-003']);
+  assert.equal(tecleo.busqueda.correcciones[0].a, 'dinosaurios');
+
+  const ruido = await buscarApi('mochila azul bonita');                                    // "bonita" no estorba
+  assert.equal(ruido.total, 3);
+  const nada = await buscarApi('xyzzy');
+  assert.equal(nada.total, 0);
+  assert.deepEqual(nada.busqueda.ignoradas, ['xyzzy']);
+
+  const relevancia = (await buscarApi('dinosaurios')).productos;
+  assert.equal(relevancia[0].codigo, 'IN-003');
+  const barata = (await buscarApi('mochila barata')).productos.map((p) => p.precio);
+  assert.deepEqual(barata, [...barata].sort((a, b) => a - b));                         // "barata" ordena por precio
+  // los filtros de la barra lateral se combinan con la búsqueda
+  const infantil = db.prepare("SELECT id FROM categorias WHERE nombre = 'Infantil'").get().id;
+  assert.deepEqual((await n.get(`/productos?q=rosa&categoria=${infantil}`)).datos.productos.map((p) => p.codigo).sort(), ['IN-001', 'IN-002']);
+});
+
+test('Buscador (unidad): raíces en español', async () => {
+  const { raiz, interpretar } = await import('../src/buscador.js');
+  for (const [a, b] of [['mochilas', 'mochila'], ['rojas', 'rojo'], ['grises', 'gris'], ['flores', 'flor'], ['azules', 'azul'], ['ninas', 'nino']]) {
+    assert.equal(raiz(a), raiz(b), `${a} ~ ${b}`);
+  }
+  const i = interpretar('Mochila para niña entre 500 y 700 sin ruedas');
+  assert.deepEqual([i.min, i.max], [500, 700]);
+  assert.deepEqual(i.excluidos.map((e) => e.original), ['ruedas']);
+});
+
+test('Bases de datos anteriores: se actualizan nombres y descripciones sin pisar cambios del administrador', async () => {
+  const { actualizarCatalogoBase } = await import('../src/seed.js');
+  const dino = prod('IN-003'), estuche = prod('AC-002');
+  // simula la versión anterior: nombre viejo, colores en el orden viejo
+  db.prepare("UPDATE productos SET nombre = 'Dinos', descripcion = 'vieja' WHERE id = ?").run(dino.id);
+  const cols = db.prepare('SELECT id, nombre, hex FROM producto_colores WHERE producto_id = ? ORDER BY id').all(dino.id);
+  const upd = db.prepare('UPDATE producto_colores SET nombre = ?, hex = ? WHERE id = ?');
+  upd.run('tmp', cols[0].hex, cols[0].id); upd.run(cols[0].nombre, cols[0].hex, cols[1].id); upd.run(cols[1].nombre, cols[1].hex, cols[0].id);
+  db.prepare("UPDATE productos SET nombre = 'Estuche editado por el admin' WHERE id = ?").run(estuche.id);
+
+  actualizarCatalogoBase();
+  actualizarCatalogoBase(); // idempotente
+  assert.equal(prod('IN-003').nombre, 'Mochila verde de dinosaurios');
+  assert.match(prod('IN-003').descripcion, /dinosaurios/);
+  assert.equal(db.prepare('SELECT nombre FROM producto_colores WHERE producto_id = ? ORDER BY id').get(dino.id).nombre, 'Verde');
+  assert.equal(prod('AC-002').nombre, 'Estuche editado por el admin');
+  db.prepare('UPDATE productos SET nombre = ? WHERE id = ?').run(estuche.nombre, estuche.id);
 });

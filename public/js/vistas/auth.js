@@ -1,4 +1,4 @@
-import { estado, esc, $, ico, logoIcono, post, toast, errorToast, campoPassword, ojoPassword, datosForm, marcarErrores, errorCampo } from '../util.js';
+import { estado, esc, $, ico, logoIcono, post, toast, errorToast, campoPassword, ojoPassword, datosForm, marcarErrores, errorCampo, validarEnVivo } from '../util.js';
 import { validarRegistro, validarNombre, validarCorreo, validarPassword } from '../validators.js';
 
 const destino = (ctx) => {
@@ -40,6 +40,9 @@ const vistaRegistro = (volver) => `<div class="contenedor auth-pagina"><div clas
   <p class="centrado" style="margin:1.1rem 0 0">¿Ya tienes cuenta? <a href="/login${volver}" data-link style="color:var(--naranja-d);font-weight:700">Inicia sesión</a></p></div></div>`;
 
 function loginEventos(ctx, form) {
+  // los errores que marca el envío se quitan al momento de corregir el dato
+  validarEnVivo($('[name=correo]', form), validarCorreo);
+  validarEnVivo($('[name=password]', form), (v) => (v ? null : 'Escribe tu contraseña.'));
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const d = datosForm(form), errores = {};
@@ -61,9 +64,9 @@ function loginEventos(ctx, form) {
 function registroEventos(ctx, form) {
   const priv = $('#f-priv'), btn = $('#btn-crear');
   const sync = () => { btn.classList.toggle('desactivado', !priv.checked); btn.setAttribute('aria-disabled', !priv.checked); };
-  priv.addEventListener('change', sync); sync();
+  priv.addEventListener('change', () => { sync(); if (priv.checked) errorCampo(priv.closest('.campo'), null); }); sync();
   const reglas = { nombres: (v) => validarNombre(v, 'El nombre'), apellido_paterno: (v) => validarNombre(v, 'El apellido paterno'), apellido_materno: (v) => validarNombre(v, 'El apellido materno'), correo: validarCorreo, password: validarPassword };
-  for (const [n, f] of Object.entries(reglas)) { const el = $(`[name=${n}]`, form); el.addEventListener('blur', () => errorCampo(el.closest('.campo'), f(el.value))); }
+  for (const [n, f] of Object.entries(reglas)) validarEnVivo($(`[name=${n}]`, form), f);
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const d = datosForm(form); d.acepta_privacidad = priv.checked;

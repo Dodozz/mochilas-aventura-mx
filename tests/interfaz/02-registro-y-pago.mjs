@@ -3,7 +3,7 @@ const llenar = (w, f, d) => { for (const [k, v] of Object.entries(d)) { const el
 const enviar = async (w, f) => { f.dispatchEvent(new w.Event('submit', { bubbles: true, cancelable: true })); await wait(700); };
 
 console.log('REGISTRO'); let w = await abrir('/catalogo');
-// visitante agrega Rosa Floral desde la tarjeta
+// visitante agrega la mochila rosa de flores desde la tarjeta
 clic(w, q(w, '[data-agregar="1"]')); await wait(500);
 chk(txt(w, '#contador-carrito') === '1', 'visitante agregó desde la tarjeta');
 await ir(w, '/carrito'); clic(w, q(w, '#btn-comprar')); await esperar(w);

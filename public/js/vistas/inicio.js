@@ -21,7 +21,7 @@ export async function render(ctx) {
   const destacadas = await get('/productos/destacadas').catch(() => []);
   if (!ctx.sigue()) return;
   const infantil = t.categorias.find((c) => norm(c.nombre) === 'infantil');
-  const estrella = destacadas.find((p) => p.nombre === 'Dinos') || destacadas[0];
+  const estrella = destacadas.find((p) => p.codigo === 'IN-003') || destacadas[0];
 
   const catHtml = t.categorias.map((c, i) => {
     const k = norm(c.nombre), img = IMG_CAT[k];

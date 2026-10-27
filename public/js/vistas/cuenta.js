@@ -1,4 +1,4 @@
-import { estado, esc, $, $$, ico, logoIcono, get, post, put, del, descargar, moneda, precio, fecha, toast, errorToast, modal, confirmar, marcarErrores, errorCampo, datosForm } from '../util.js';
+import { estado, esc, $, $$, ico, logoIcono, get, post, put, del, descargar, moneda, precio, fecha, toast, errorToast, modal, confirmar, marcarErrores, errorCampo, datosForm, validarEnVivo } from '../util.js';
 import { validarPerfil, validarNombre, validarTelefono } from '../validators.js';
 import { formDireccion, activarDireccion, leerDireccion, validarFormDireccion, textoDireccion } from '../direccion.js';
 
@@ -34,7 +34,7 @@ async function datos(ctx, sec) {
     <section class="tarjeta" id="dir-sec" style="margin-top:1.2rem" aria-labelledby="h-dir"><h2 id="h-dir">Direcciones guardadas</h2><div id="dirs"></div></section>`;
   const form = $('#f-datos');
   const reglas = { nombres: (v) => validarNombre(v, 'El nombre'), apellido_paterno: (v) => validarNombre(v, 'El apellido paterno'), apellido_materno: (v) => validarNombre(v, 'El apellido materno'), telefono: (v) => validarTelefono(v) };
-  for (const [n, f] of Object.entries(reglas)) { const el = $(`[name=${n}]`, form); el.addEventListener('blur', () => errorCampo(el.closest('.campo'), f(el.value))); }
+  for (const [n, f] of Object.entries(reglas)) validarEnVivo($(`[name=${n}]`, form), f);
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const d = datosForm(form);

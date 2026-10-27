@@ -39,20 +39,22 @@ vencimiento futuro (ej. `12/30`) y CVV de 3 dígitos.
 ### Pruebas automáticas
 
 ```bash
-npm test          # 16 pruebas de la API (rápidas)
-npm run test:ui   # 4 recorridos de la interfaz real (138 verificaciones) con jsdom
+npm test          # 20 pruebas de la API (rápidas)
+npm run test:ui   # 5 recorridos de la interfaz real (162 verificaciones) con jsdom
 ```
 
-`npm test` ejecuta 16 pruebas contra la API real (registro, correo duplicado, carrito y límites, pago, descuento de stock en transacción,
+`npm test` ejecuta 20 pruebas contra la API real (registro, correo duplicado, carrito y límites, pago, descuento de stock en transacción,
 **dos compras simultáneas de las últimas piezas**, roles del panel, estatus, cancelación, reseñas, factura + PDF,
-devoluciones, catálogo y geografía). `npm run test:ui` recorre la interfaz completa: visitante, registro y pago, cuenta de cliente y panel de administración.
+devoluciones, catálogo, geografía, buscador inteligente y actualización de bases de datos anteriores). `npm run test:ui` recorre la interfaz
+completa: visitante, registro y pago, cuenta de cliente, panel de administración y búsqueda + validación en vivo.
 
 ## Estructura
 
 ```
 server.js                 Arranque de Express
 src/db.js                 Esquema relacional (tablas, llaves, restricciones) y utilidades
-src/seed.js               Datos de ejemplo del anexo + usuarios de prueba
+src/seed.js               Datos de ejemplo del anexo + usuarios de prueba (y actualización de bases ya creadas)
+src/buscador.js           Buscador inteligente del catálogo (sin dependencias ni servicios externos)
 src/auth.js               Sesiones, cookies y verificación de rol en cada petición
 src/servicios/            Reglas de negocio: catalogo, carrito, pedidos (checkout), facturas, admin
 src/rutas/api.js          Endpoints  /api/...  y  /api/admin/...
@@ -61,7 +63,8 @@ src/data/geografia.json   Estados y municipios (guardados en la BD; sin APIs ext
 public/js/validators.js   Validaciones RF-20 — el MISMO archivo corre en pantalla y en servidor
 public/js/vistas/         Una pantalla por archivo (inicio, catálogo, producto, carrito, checkout, cuenta, admin…)
 public/css/styles.css     Diseño (paleta del logotipo: azul marino, naranja y crema)
-tests/api.test.js         Pruebas automáticas
+tests/api.test.js         Pruebas automáticas de la API
+tests/interfaz/           Recorridos de la interfaz (jsdom)
 ```
 
 ## Cobertura de requerimientos
@@ -69,9 +72,9 @@ tests/api.test.js         Pruebas automáticas
 | Requerimiento | Dónde está |
 |---|---|
 | **RF-1** Registro, acceso y roles | `/registro`, `/login`. Correo único sin distinguir mayúsculas; mensaje genérico al fallar el acceso; el rol vive en la BD; el carrito del visitante se conserva al registrarse o entrar y se regresa a la pantalla de origen |
-| **RF-2** Encabezado | Logo, buscador, categorías, favoritos, carrito con contador, "Hola, Nombre" con menú; en móvil menú desplegable y solo la inicial |
+| **RF-2** Encabezado | Logo, buscador, categorías, favoritos, carrito con contador, "Hola, Nombre" con menú; en móvil menú desplegable y solo la inicial (cabe en una línea desde 320 px). En `/catalogo` el buscador del encabezado se oculta para no duplicar el del catálogo |
 | **RF-3 / RF-11 / RF-16** Inicio, destacadas, redes y video | `/`: banner, categorías, destacadas elegidas por el admin (nunca agotadas ni ocultas), sección de video + redes (se abren en pestaña nueva), compartir mochila |
-| **RF-4** Catálogo y detalle | `/catalogo` (búsqueda, categorías, precio, disponibilidad, orden, cuadrícula/lista, paginación) y `/producto/:id` (galería, color, medidas Largo/Alto/Ancho, acordeones) |
+| **RF-4** Catálogo y detalle | `/catalogo` (búsqueda inteligente, categorías, precio, disponibilidad, orden, cuadrícula/lista, paginación; cada tarjeta muestra una descripción breve) y `/producto/:id` (galería, color, medidas Largo/Alto/Ancho, acordeones) |
 | **RF-5** Carrito | Cantidad con menú 1–4 que también se puede escribir (solo enteros, mínimo 1, máximo 10 o las existencias, corrige con aviso), suma de línea repetida, aviso de envío gratis, IVA solo informativo, vigencia de 7 días |
 | **RF-6 / RF-7** Pago y envíos | `/checkout/entrega` → `/checkout/pago` → confirmación (4 pasos). Zona automática por estado, validación en pantalla **y** servidor, pago simulado |
 | **RF-8** Inventario | Descuento en transacción al aprobar el pago, etiqueta "¡Solo quedan N piezas!", restitución al cancelar, ajuste con aviso si cambió el stock al pagar |
@@ -82,8 +85,27 @@ tests/api.test.js         Pruebas automáticas
 | **RF-15** Devoluciones y cancelaciones | Cancelar antes del envío (restituye stock); devolución solo de pedidos entregados dentro de 15 días; el admin aprueba/rechaza y la pieza regresa al inventario solo si llegó en buen estado |
 | **RF-18** Panel de administración | `/admin/...`: pedidos (filtros, nuevos, estatus + guía + correo), catálogo (alta/edición/ocultar/destacar/fotos), categorías, inventario (alertas, entradas, bitácora), reseñas, devoluciones, configuración (envío, mínimo gratis, límites), correos |
 | **RF-19** Mis pedidos y perfil | `/cuenta/...`: datos, direcciones, pedidos, favoritos |
-| **RF-20** Validaciones | `public/js/validators.js`, compartido entre pantalla y servidor |
+| **RF-20** Validaciones | `public/js/validators.js`, compartido entre pantalla y servidor. En pantalla se valida al salir del campo y, si hay un error, se revisa con cada tecla: el mensaje rojo se quita en el momento en que el dato queda bien (por ejemplo, al escribir la @ del correo) |
 | **RNF-1…4** | Nombre comercial en encabezado/pie/correos/facturas; adaptable a móvil; ≤5 pasos de compra; mensajes en español; 300 peticiones simultáneas sin errores; **dos compras simultáneas no venden de más**; BD relacional con rol verificado en cada petición y bitácora de movimientos |
+
+## Buscador del catálogo
+
+El buscador (`src/buscador.js`) entiende la búsqueda como la escribiría un cliente:
+
+- Busca en **nombre, descripción, categoría, colores, colección, material y código**, con más peso en el nombre.
+- Ignora mayúsculas y acentos, y une singular/plural y masculino/femenino: `Lápices` = `lapiz`, `rojas` = `rojo`.
+- Entiende **sinónimos** de uso común: `maleta` → mochila, `compu` → laptop, `lunch` → lonchera, `para niña` / `kinder` → infantil,
+  `prepa` / `uni` → juvenil, `rueditas` / `llantitas` → ruedas, `dino` / `trex` → dinosaurio, `lluvia` → impermeable…
+- Tolera **errores de tecleo** (`mochla`, `dinosuario`, `lonchra`) y palabras a medio escribir (`moch`, `unicor`), y avisa
+  "Mostrando resultados para *mochila*".
+- Todas las palabras importantes deben coincidir (`mochila azul` no trae la lonchera azul) y las que no describen a ningún producto
+  (`mochila azul bonita`) se ignoran en lugar de vaciar los resultados.
+- Entiende **exclusiones y precios**: `mochila sin ruedas`, `menos de 600`, `entre 500 y 700`, `barata` (ordena del más barato).
+- Ordena por relevancia y se combina con los filtros de categoría, precio y disponibilidad.
+
+Para que funcione bien con productos nuevos, nómbralos diciendo **qué son** (tipo + color o tema, p. ej. *Mochila azul de dinosaurios*)
+y escribe una descripción con las palabras que usaría un cliente (para quién es, qué incluye, colores). Los sinónimos se amplían en
+`SINONIMOS_BASE` dentro de `src/buscador.js`.
 
 ## Decisiones y supuestos (revísalos)
 
@@ -105,7 +127,7 @@ tests/api.test.js         Pruebas automáticas
 | Pago: "Envío Gratis" con total $927 | Gratis solo desde $999 (RN-6) |
 | Logo de PayPal en el pie | Se omitió: el único medio es tarjeta de crédito/débito (RF-6) |
 | `hola@…` en el pie | Se usó `contacto@mochilasaventuramx.com` del anexo (configurable) |
-| Catálogo con otros productos y precios tachados | Se usaron los 8 productos del anexo |
+| Catálogo con otros productos y precios tachados | Se usaron los 8 productos del anexo, con nombres que dicen qué es cada uno (*Mochila verde de dinosaurios* en lugar de *Dinos*) y una descripción propia. Las bases de datos creadas con los nombres anteriores se actualizan solas al arrancar, salvo los productos que el administrador ya haya editado |
 | Estatus "En proceso" / "Pago pendiente" | Se usaron los de RF-7 (+ cancelado) |
 | Folios `#MX-2026-0045` / `ORD-12345` | Se usó `PED-000124` y `FAC-000001` (RN-20) |
 
@@ -114,7 +136,7 @@ tests/api.test.js         Pruebas automáticas
 - **Video real (RF-16 CA2 / RNF-1 CA3):** no se puede generar un video real desde el código. Publica uno en una red social de la tienda y
   pega su enlace en *Administración → Configuración → Video de la tienda* (admite YouTube, archivo `.mp4` o enlace a la red social). Mientras tanto la sección
   enlaza al perfil de TikTok de ejemplo.
-- **Fotos:** las de Rosa Floral, Dinos, Espacial, Urbana y el Estuche son recortes de los bocetos (baja resolución). Unicornio, Antirrobo y
-  Lonchera usan ilustraciones SVG de respaldo. Sube fotos reales desde *Administración → Catálogo*.
+- **Fotos:** las de la mochila rosa de flores, la de dinosaurios, la de galaxia, la de laptop y el estuche son recortes de los bocetos
+  (baja resolución). La de unicornio, la antirrobo y la lonchera usan ilustraciones SVG de respaldo. Sube fotos reales desde *Administración → Catálogo*.
 - **Datos de contacto y redes:** son los de ejemplo del anexo; cámbialos en la tabla `configuracion`.
 - **Producción:** define `NODE_ENV=production` y usa HTTPS (las cookies pasan a `Secure`).

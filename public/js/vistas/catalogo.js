@@ -1,5 +1,7 @@
 import { estado, esc, $, $$, ico, get, precio, tarjetaProducto, activarTarjetas, errorToast } from '../util.js';
 
+const SUGERENCIAS = ['mochila con ruedas', 'para niña', 'laptop', 'dinosaurios', 'lonchera', 'mochila azul'];
+
 export async function render(ctx) {
   const t = estado.tienda;
   const q = Object.fromEntries(ctx.query.entries());
@@ -8,7 +10,7 @@ export async function render(ctx) {
   let vista = q.vista === 'lista' ? 'lista' : 'cuadricula';
   let temporizador;
 
-  const titulo = () => (cats.size === 1 ? t.categorias.find((c) => String(c.id) === [...cats][0])?.nombre || 'Mochilas' : q.q ? `Resultados para "${q.q}"` : 'Todas las mochilas');
+  const titulo = () => (q.q ? `Resultados para "${q.q}"` : cats.size === 1 ? t.categorias.find((c) => String(c.id) === [...cats][0])?.nombre || 'Mochilas' : 'Todas las mochilas');
   ctx.titulo(titulo());
 
   ctx.contenedor.innerHTML = `<div class="contenedor seccion">
@@ -26,11 +28,12 @@ export async function render(ctx) {
       </aside>
       <section aria-live="polite">
         <div class="barra-cat">
-          <div class="buscar">${ico('buscar')}<input class="campo-ico" type="search" id="f-q" placeholder="Buscar mochilas..." aria-label="Buscar mochilas por nombre" value="${esc(q.q || '')}"></div>
+          <div class="buscar">${ico('buscar')}<input class="campo-ico" type="search" id="f-q" placeholder="Busca por tipo, color, tema o uso…" aria-label="Buscar productos por nombre, descripción, color o uso" autocomplete="off" value="${esc(q.q || '')}"></div>
           <div style="display:flex;gap:.7rem;align-items:center;flex-wrap:wrap"><label for="f-orden">Ordenar por:</label>
             <select id="f-orden" class="campo-ico" style="width:auto"><option value="">Relevancia</option><option value="precio_asc">Precio: Bajo a Alto</option><option value="precio_desc">Precio: Alto a Bajo</option><option value="nuevo">Más Nuevo</option></select>
             <div class="vista-btns" role="group" aria-label="Tipo de vista"><button data-vista="cuadricula" aria-label="Vista en cuadrícula">${ico('rejilla')}</button><button data-vista="lista" aria-label="Vista en lista">${ico('lista')}</button></div></div>
         </div>
+        <p class="nota-busqueda oculto" id="nota-busqueda" role="status"></p>
         <div id="resultado"><div class="cargando"><div class="spinner"></div>Cargando mochilas…</div></div>
         <nav class="paginacion" id="paginacion" aria-label="Paginación"></nav>
       </section>
@@ -75,11 +78,16 @@ export async function render(ctx) {
       for (const s of [sMin, sMax]) { s.min = rango.min; s.max = rango.max; }
       sMin.value = q.min ?? rango.min; sMax.value = q.max ?? rango.max; pintarRango();
     }
+    pintarNota(d);
     const res = $('#resultado');
     res.innerHTML = d.productos.length
       ? `<div class="grid-prod ${vista === 'lista' ? 'lista' : ''}">${d.productos.map(tarjetaProducto).join('')}</div>`
-      : `<div class="vacio"><h3>No encontramos mochilas con esos filtros</h3><p>Prueba con otro nombre, otra categoría o amplía el rango de precio.</p><button class="btn sec" id="limpiar">Limpiar filtros</button></div>`;
+      : `<div class="vacio"><h3>${q.q ? `No encontramos productos para "${esc(q.q)}"` : 'No encontramos mochilas con esos filtros'}</h3>
+          <p>Prueba con otra palabra, otra categoría o amplía el rango de precio.</p>
+          ${q.q ? `<p class="sugerencias">Puedes buscar, por ejemplo: ${SUGERENCIAS.map((x) => `<button type="button" class="chip" data-sugerencia="${esc(x)}">${esc(x)}</button>`).join(' ')}</p>` : ''}
+          <button class="btn sec" id="limpiar">Limpiar filtros</button></div>`;
     $('#limpiar')?.addEventListener('click', () => ctx.navegar('/catalogo'));
+    $$('[data-sugerencia]', res).forEach((b) => b.addEventListener('click', () => buscarTexto(b.dataset.sugerencia)));
     const pg = $('#paginacion');
     const nums = Array.from({ length: d.paginas }, (_, i) => i + 1);
     pg.innerHTML = d.paginas > 1
@@ -87,11 +95,30 @@ export async function render(ctx) {
       : '';
   }
 
+  // Explica cómo se entendió la búsqueda: correcciones de tecleo, palabras ignoradas, exclusiones y precios.
+  function pintarNota(d) {
+    const nota = $('#nota-busqueda'), b = d.busqueda;
+    const partes = [];
+    if (b && d.productos.length) {
+      if (b.correcciones?.length) partes.push(`Mostrando resultados para ${b.correcciones.map((c) => `<strong>${esc(c.a)}</strong>`).join(', ')} (escribiste ${b.correcciones.map((c) => `"${esc(c.de)}"`).join(', ')}).`);
+      if (b.excluidas?.length) partes.push(`Sin ${b.excluidas.map((x) => `<strong>${esc(x)}</strong>`).join(', ')}.`);
+      if (b.min != null && b.max != null) partes.push(`Precio entre ${precio(b.min)} y ${precio(b.max)}.`);
+      else if (b.max != null) partes.push(`Precio hasta ${precio(b.max)}.`);
+      else if (b.min != null) partes.push(`Precio desde ${precio(b.min)}.`);
+      if (b.orden === 'precio_asc' && !q.orden) partes.push('Ordenado del más barato al más caro.');
+      if (b.ignoradas?.length) partes.push(`No usamos: ${b.ignoradas.map((x) => `"${esc(x)}"`).join(', ')}.`);
+    }
+    nota.innerHTML = partes.join(' ');
+    nota.classList.toggle('oculto', !partes.length);
+  }
+  const buscarTexto = (texto) => { $('#f-q').value = texto; q.q = texto; cargar(1); };
+
   const aplicar = (r = true) => { if (r) cargar(1); };
   $$('[name=cat]').forEach((c) => c.addEventListener('change', () => { cats[c.checked ? 'add' : 'delete'](c.value); aplicar(); }));
   $('#f-disp').addEventListener('change', () => aplicar());
   $('#f-orden').addEventListener('change', (e) => { q.orden = e.target.value; aplicar(); });
-  $('#f-q').addEventListener('input', (e) => { clearTimeout(temporizador); temporizador = setTimeout(() => { q.q = e.target.value.trim(); aplicar(); }, 350); });
+  $('#f-q').addEventListener('input', (e) => { clearTimeout(temporizador); temporizador = setTimeout(() => { q.q = e.target.value.trim(); aplicar(); }, 300); });
+  $('#f-q').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); clearTimeout(temporizador); q.q = e.target.value.trim(); aplicar(); } });
   for (const s of [sMin, sMax]) {
     s.addEventListener('input', pintarRango);
     s.addEventListener('change', () => { const [a, b] = pintarRango(); q.min = a; q.max = b; aplicar(); });
