@@ -78,6 +78,36 @@ function pintarEncabezado() {
       await post('/auth/logout'); estado.usuario = null; await refrescarSesion(); toast('Cerraste sesión. Tu carrito se conserva en tu cuenta.'); navegar('/');
     });
   }
+  activarEncabezadoFijo();
+}
+
+// ------------------------------------------------------------------ Encabezado fijo al bajar
+// El encabezado se queda pegado arriba (CSS: position sticky). Cuando la franja de "Envío gratis" sale de la
+// pantalla se vuelve compacto; además se publica su alto en --alto-enc para que los saltos a una sección
+// y los paneles laterales fijos no queden debajo de él.
+let vigiaAnuncio, vigiaAlto, alScroll;
+function activarEncabezadoFijo() {
+  const enc = $('.encabezado'), anuncio = $('.anuncio');
+  if (!enc) return;
+  vigiaAnuncio?.disconnect(); vigiaAlto?.disconnect();
+  if (alScroll) window.removeEventListener('scroll', alScroll);
+  if ('IntersectionObserver' in window && anuncio) {
+    vigiaAnuncio = new IntersectionObserver(([e]) => enc.classList.toggle('compacto', !e.isIntersecting));
+    vigiaAnuncio.observe(anuncio);
+  } else {
+    alScroll = () => enc.classList.toggle('compacto', window.scrollY > (anuncio?.offsetHeight || 40));
+    window.addEventListener('scroll', alScroll, { passive: true }); alScroll();
+  }
+  const medir = () => document.documentElement.style.setProperty('--alto-enc', `${Math.round(enc.getBoundingClientRect().height)}px`);
+  if ('ResizeObserver' in window) { vigiaAlto = new ResizeObserver(medir); vigiaAlto.observe(enc); }
+  medir();
+}
+
+/** Al cambiar de pantalla se cierran el menú del celular y el menú de la cuenta. */
+function cerrarMenus() {
+  const menu = $('#nav-principal'), btn = $('#btn-menu');
+  if (menu?.classList.contains('abierto')) { menu.classList.remove('abierto'); $('#buscar-form')?.classList.remove('abierto'); btn?.setAttribute('aria-expanded', 'false'); }
+  $('#menu-cuenta')?.classList.add('oculto'); $('#btn-cuenta')?.setAttribute('aria-expanded', 'false');
 }
 document.addEventListener('click', (e) => { const m = $('#menu-cuenta'); if (m && !e.target.closest('.menu-cuenta')) m.classList.add('oculto'); });
 
@@ -117,6 +147,7 @@ async function pintarRuta() {
     pintarEncabezado(); pintarPie();
   } else { // al salir del catálogo el buscador del encabezado vuelve vacío
     const inp = $('#buscar-form input'); if (inp) inp.value = '';
+    cerrarMenus();
   }
   const contenedor = esAdmin ? $('#admin-raiz') : $('#contenido');
   contenedor.innerHTML = '<div class="cargando"><div class="spinner"></div>Cargando…</div>';
@@ -129,8 +160,15 @@ async function pintarRuta() {
       sigue: () => yo === numRender, // false si el usuario ya navegó a otra pantalla
     };
     await vista.render(ctx);
+    try { sessionStorage.removeItem('recarga-version'); } catch { /* sin almacenamiento */ }
   } catch (e) {
     if (yo !== numRender) return;
+    // Si se publicó una versión nueva mientras la página estaba abierta, el navegador puede mezclar archivos
+    // viejos y nuevos. En ese caso se recarga UNA vez para traer la versión completa.
+    if (/dynamically imported module|does not provide an export|Importing a module script failed|error loading dynamically/i.test(e?.message || '')) {
+      let ya = true; try { ya = sessionStorage.getItem('recarga-version') === '1'; if (!ya) sessionStorage.setItem('recarga-version', '1'); } catch { /* sin almacenamiento */ }
+      if (!ya) { location.reload(); return; }
+    }
     console.error(e);
     contenedor.innerHTML = `<div class="contenedor vacio"><h2>No pudimos cargar esta pantalla</h2><p>${esc(e.message || 'Inténtalo de nuevo en unos momentos.')}</p><a class="btn" href="/" data-link>Ir al inicio</a></div>`;
   }

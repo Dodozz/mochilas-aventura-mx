@@ -412,3 +412,23 @@ test('Bases de datos anteriores: se actualizan nombres y descripciones sin pisar
   assert.equal(prod('AC-002').nombre, 'Estuche editado por el admin');
   db.prepare('UPDATE productos SET nombre = ? WHERE id = ?').run(estuche.nombre, estuche.id);
 });
+
+test('Vercel: varias copias del servidor arrancando a la vez sobre una BD nueva no se caen y siembran una sola vez', async () => {
+  const { spawn } = await import('node:child_process');
+  const ruta = path.join(tmp, 'carrera.db');
+  const raiz = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+  const arrancar = () => new Promise((listo) => {
+    const p = spawn(process.execPath, ['-e', "import('./server.js').then(() => console.log('OK')).catch((e) => { console.log('FALLA ' + e.message); process.exit(1); })"],
+      { cwd: raiz, env: { ...process.env, DB_PATH: ruta, NODE_ENV: 'test' } });
+    let salida = ''; p.stdout.on('data', (d) => { salida += d; }); p.stderr.on('data', (d) => { salida += d; });
+    p.on('close', (codigo) => listo({ codigo, salida: salida.trim() }));
+  });
+  const resultados = await Promise.all(Array.from({ length: 8 }, arrancar));
+  for (const r of resultados) assert.equal(r.codigo, 0, r.salida);
+  const Database = (await import('better-sqlite3')).default;
+  const otra = new Database(ruta, { readonly: true });
+  assert.equal(otra.prepare('SELECT COUNT(*) n FROM usuarios').get().n, 7);
+  assert.equal(otra.prepare('SELECT COUNT(*) n FROM productos').get().n, 8);
+  assert.equal(otra.prepare('SELECT COUNT(*) n FROM pedidos').get().n, 4);
+  otra.close();
+});

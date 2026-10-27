@@ -62,17 +62,27 @@ export const estrellas = (prom) => {
 // ------------------------------------------------------------------ API
 export class ErrorHTTP extends Error { constructor(estado, datos) { super(datos?.mensaje || 'Error'); this.estado = estado; this.datos = datos || {}; } }
 
+const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+
 export async function api(ruta, { metodo = 'GET', cuerpo } = {}) {
+  // Las CONSULTAS (GET) se reintentan solas hasta 2 veces si el servidor tropieza un momento (error 5xx o sin
+  // conexión, p. ej. mientras el hosting arranca una copia nueva). Las acciones (POST/PUT/DELETE) nunca se
+  // repiten solas, para no duplicar pedidos ni pagos.
+  const intentos = metodo === 'GET' ? 3 : 1;
   let res;
-  try {
-    res = await fetch('/api' + ruta, {
-      method: metodo,
-      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch' },
-      body: cuerpo !== undefined ? JSON.stringify(cuerpo) : undefined,
-      credentials: 'same-origin',
-    });
-  } catch {
-    throw new ErrorHTTP(0, { mensaje: 'No pudimos conectar con la tienda. Revisa tu conexión e inténtalo de nuevo.' });
+  for (let i = 1; i <= intentos; i++) {
+    try {
+      res = await fetch('/api' + ruta, {
+        method: metodo,
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch' },
+        body: cuerpo !== undefined ? JSON.stringify(cuerpo) : undefined,
+        credentials: 'same-origin',
+      });
+      if (res.status < 500 || i === intentos) break;
+    } catch {
+      if (i === intentos) throw new ErrorHTTP(0, { mensaje: 'No pudimos conectar con la tienda. Revisa tu conexión e inténtalo de nuevo.' });
+    }
+    await esperar(i === 1 ? 400 : 1200);
   }
   const datos = await res.json().catch(() => ({}));
   if (!res.ok) throw new ErrorHTTP(res.status, datos);

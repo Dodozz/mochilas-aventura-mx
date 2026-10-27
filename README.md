@@ -39,13 +39,14 @@ vencimiento futuro (ej. `12/30`) y CVV de 3 dígitos.
 ### Pruebas automáticas
 
 ```bash
-npm test          # 20 pruebas de la API (rápidas)
-npm run test:ui   # 5 recorridos de la interfaz real (162 verificaciones) con jsdom
+npm test          # 21 pruebas de la API (rápidas)
+npm run test:ui   # 5 recorridos de la interfaz real (165 verificaciones) con jsdom
 ```
 
-`npm test` ejecuta 20 pruebas contra la API real (registro, correo duplicado, carrito y límites, pago, descuento de stock en transacción,
+`npm test` ejecuta 21 pruebas contra la API real (registro, correo duplicado, carrito y límites, pago, descuento de stock en transacción,
 **dos compras simultáneas de las últimas piezas**, roles del panel, estatus, cancelación, reseñas, factura + PDF,
-devoluciones, catálogo, geografía, buscador inteligente y actualización de bases de datos anteriores). `npm run test:ui` recorre la interfaz
+devoluciones, catálogo, geografía, buscador inteligente, actualización de bases de datos anteriores y **varias copias del servidor
+arrancando a la vez**, como pasa en Vercel). `npm run test:ui` recorre la interfaz
 completa: visitante, registro y pago, cuenta de cliente, panel de administración y búsqueda + validación en vivo.
 
 ## Estructura
@@ -72,7 +73,7 @@ tests/interfaz/           Recorridos de la interfaz (jsdom)
 | Requerimiento | Dónde está |
 |---|---|
 | **RF-1** Registro, acceso y roles | `/registro`, `/login`. Correo único sin distinguir mayúsculas; mensaje genérico al fallar el acceso; el rol vive en la BD; el carrito del visitante se conserva al registrarse o entrar y se regresa a la pantalla de origen |
-| **RF-2** Encabezado | Logo, buscador, categorías, favoritos, carrito con contador, "Hola, Nombre" con menú; en móvil menú desplegable y solo la inicial (cabe en una línea desde 320 px). En `/catalogo` el buscador del encabezado se oculta para no duplicar el del catálogo |
+| **RF-2** Encabezado | Logo, buscador, categorías, favoritos, carrito con contador, "Hola, Nombre" con menú; en móvil menú desplegable y solo la inicial (cabe en una línea desde 320 px). Se queda fijo arriba al bajar y se vuelve compacto; el menú del celular se cierra al cambiar de pantalla. En `/catalogo` el buscador del encabezado se oculta para no duplicar el del catálogo |
 | **RF-3 / RF-11 / RF-16** Inicio, destacadas, redes y video | `/`: banner, categorías, destacadas elegidas por el admin (nunca agotadas ni ocultas), sección de video + redes (se abren en pestaña nueva), compartir mochila |
 | **RF-4** Catálogo y detalle | `/catalogo` (búsqueda inteligente, categorías, precio, disponibilidad, orden, cuadrícula/lista, paginación; cada tarjeta muestra una descripción breve) y `/producto/:id` (galería, color, medidas Largo/Alto/Ancho, acordeones) |
 | **RF-5** Carrito | Cantidad con menú 1–4 que también se puede escribir (solo enteros, mínimo 1, máximo 10 o las existencias, corrige con aviso), suma de línea repetida, aviso de envío gratis, IVA solo informativo, vigencia de 7 días |
@@ -140,3 +141,8 @@ y escribe una descripción con las palabras que usaría un cliente (para quién 
   (baja resolución). La de unicornio, la antirrobo y la lonchera usan ilustraciones SVG de respaldo. Sube fotos reales desde *Administración → Catálogo*.
 - **Datos de contacto y redes:** son los de ejemplo del anexo; cámbialos en la tabla `configuracion`.
 - **Producción:** define `NODE_ENV=production` y usa HTTPS (las cookies pasan a `Secure`).
+- **Vercel y la base de datos:** en Vercel la base SQLite vive en `/tmp`, que **se borra en cada despliegue y cuando el sitio se
+  reactiva tras estar inactivo**: los usuarios, pedidos y cambios del panel se pierden y vuelven los datos de ejemplo. Sirve para
+  mostrar el proyecto, no para una tienda real. Para conservar los datos usa una base de datos externa (por ejemplo Turso/libSQL,
+  que es compatible con SQLite, o Postgres) o un hosting con disco persistente (Railway, Render, un VPS).
+  El arranque ya es seguro cuando Vercel levanta varias copias del servidor al mismo tiempo: solo una siembra los datos y las demás esperan.
