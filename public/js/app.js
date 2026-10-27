@@ -169,6 +169,7 @@ async function pintarRuta() {
       let ya = true; try { ya = sessionStorage.getItem('recarga-version') === '1'; if (!ya) sessionStorage.setItem('recarga-version', '1'); } catch { /* sin almacenamiento */ }
       if (!ya) { location.reload(); return; }
     }
+    if (e?.estado === 401) return; // la sesión terminó: ya se está llevando a la persona a iniciar sesión
     console.error(e);
     contenedor.innerHTML = `<div class="contenedor vacio"><h2>No pudimos cargar esta pantalla</h2><p>${esc(e.message || 'Inténtalo de nuevo en unos momentos.')}</p><a class="btn" href="/" data-link>Ir al inicio</a></div>`;
   }
@@ -185,6 +186,17 @@ document.addEventListener('click', (e) => {
   navegar(url.pathname + url.search + url.hash);
 });
 window.addEventListener('popstate', pintarRuta);
+// Si la sesión terminó en el servidor, se actualiza el encabezado y se pide iniciar sesión, regresando después a la misma pantalla.
+let avisandoSesion = false;
+window.addEventListener('sesion-vencida', async () => {
+  if (avisandoSesion) return;
+  avisandoSesion = true;
+  try {
+    await refrescarSesion().catch(() => {});
+    toast('Tu sesión terminó. Inicia sesión de nuevo para continuar.');
+    if (!/^\/(login|registro)$/.test(location.pathname)) navegar(`/login?volver=${encodeURIComponent(location.pathname + location.search)}`, { reemplazar: true });
+  } finally { avisandoSesion = false; }
+});
 
 // ------------------------------------------------------------------ Arranque
 (async () => {

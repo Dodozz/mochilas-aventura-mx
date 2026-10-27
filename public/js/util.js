@@ -85,6 +85,12 @@ export async function api(ruta, { metodo = 'GET', cuerpo } = {}) {
     await esperar(i === 1 ? 400 : 1200);
   }
   const datos = await res.json().catch(() => ({}));
+  // La pantalla creía que había sesión, pero el servidor dice que no (venció o se cerró en otro lado):
+  // se avisa a la aplicación para que actualice el encabezado y pida iniciar sesión de nuevo.
+  if (res.status === 401 && estado.usuario && !ruta.startsWith('/auth/')) {
+    estado.usuario = null;
+    window.dispatchEvent(new CustomEvent('sesion-vencida'));
+  }
   if (!res.ok) throw new ErrorHTTP(res.status, datos);
   return datos;
 }

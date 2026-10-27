@@ -24,7 +24,7 @@ escribir(w, q(w, '#fe'), ''); escribir(w, q(w, '#ff'), 'hoy'); await wait(600);
 // cuántos pedidos son "de hoy" depende de la hora (entre 00:00 y 03:00 de México los de ejemplo caen en el día anterior)
 const { db: bd } = await import('../../src/db.js');
 const inicioHoyMX = new Date(`${new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' })}T00:00:00-06:00`).toISOString();
-const deHoy = bd.prepare('SELECT COUNT(*) n FROM pedidos WHERE creado_en >= ?').get(inicioHoyMX).n;
+const deHoy = (await bd.prepare('SELECT COUNT(*) n FROM pedidos WHERE creado_en >= ?').get(inicioHoyMX)).n;
 chk(qa(w, '#tb tr[data-id]').length === deHoy, `filtro "hoy" = ${deHoy} (${qa(w, '#tb tr[data-id]').length})`);
 escribir(w, q(w, '#ff'), ''); escribir(w, q(w, '#fq'), 'PED-000002'); await wait(900);
 chk(qa(w, '#tb tr[data-id]').length === 1, 'búsqueda por folio');

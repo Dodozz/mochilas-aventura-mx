@@ -1,7 +1,7 @@
 {
   "functions": {
     "server.js": {
-      "includeFiles": "public/index.html"
+      "includeFiles": "{public/index.html,node_modules/@libsql/linux-x64-gnu/**}"
     }
   }
 }

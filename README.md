@@ -5,7 +5,7 @@ Tienda en línea completa (catálogo, carrito, pago simulado, pedidos, facturas,
 25 bocetos de Irene.
 
 - **Backend:** Node.js + Express
-- **Base de datos:** SQLite relacional (archivo `data/mochilas.db`, se crea sola) con `better-sqlite3`
+- **Base de datos:** SQLite relacional con `@libsql/client`: en tu computadora un archivo (`data/mochilas.db`, se crea solo); en Vercel, una base compartida en **Turso** (compatible con SQLite). Ver *Base de datos compartida en Vercel*.
 - **Frontend:** JavaScript sin framework (una sola página, rutas con URL reales), HTML y CSS propios, adaptable a móvil
 - **Correo:** simulado y guardado en la base de datos (SMTP opcional con `nodemailer`)
 - **Factura:** PDF generado con `pdfkit`
@@ -39,14 +39,14 @@ vencimiento futuro (ej. `12/30`) y CVV de 3 dígitos.
 ### Pruebas automáticas
 
 ```bash
-npm test          # 21 pruebas de la API (rápidas)
-npm run test:ui   # 5 recorridos de la interfaz real (169 verificaciones) con jsdom
+npm test          # 22 pruebas de la API (rápidas)
+npm run test:ui   # 5 recorridos de la interfaz real (172 verificaciones) con jsdom
 ```
 
-`npm test` ejecuta 21 pruebas contra la API real (registro, correo duplicado, carrito y límites, pago, descuento de stock en transacción,
+`npm test` ejecuta 22 pruebas contra la API real (registro, correo duplicado, carrito y límites, pago, descuento de stock en transacción,
 **dos compras simultáneas de las últimas piezas**, roles del panel, estatus, cancelación, reseñas, factura + PDF,
 devoluciones, catálogo, geografía, buscador inteligente, actualización de bases de datos anteriores y **varias copias del servidor
-arrancando a la vez**, como pasa en Vercel). `npm run test:ui` recorre la interfaz
+arrancando a la vez** y **compartiendo la sesión y el pago entre copias**, como pasa en Vercel con Turso). `npm run test:ui` recorre la interfaz
 completa: visitante, registro y pago, cuenta de cliente, panel de administración y búsqueda + validación en vivo.
 
 ## Estructura
@@ -141,8 +141,29 @@ y escribe una descripción con las palabras que usaría un cliente (para quién 
   (baja resolución). La de unicornio, la antirrobo y la lonchera usan ilustraciones SVG de respaldo. Sube fotos reales desde *Administración → Catálogo*.
 - **Datos de contacto y redes:** son los de ejemplo del anexo; cámbialos en la tabla `configuracion`.
 - **Producción:** define `NODE_ENV=production` y usa HTTPS (las cookies pasan a `Secure`).
-- **Vercel y la base de datos:** en Vercel la base SQLite vive en `/tmp`, que **se borra en cada despliegue y cuando el sitio se
-  reactiva tras estar inactivo**: los usuarios, pedidos y cambios del panel se pierden y vuelven los datos de ejemplo. Sirve para
-  mostrar el proyecto, no para una tienda real. Para conservar los datos usa una base de datos externa (por ejemplo Turso/libSQL,
-  que es compatible con SQLite, o Postgres) o un hosting con disco persistente (Railway, Render, un VPS).
-  El arranque ya es seguro cuando Vercel levanta varias copias del servidor al mismo tiempo: solo una siembra los datos y las demás esperan.
+- **Vercel: conecta Turso** (ver la sección siguiente). Sin Turso, en Vercel cada copia del servidor usa su propia base en `/tmp`,
+  que además se borra en cada despliegue: la sesión, el carrito y los pedidos "desaparecen" y al pagar pide iniciar sesión otra vez.
+
+## Base de datos compartida en Vercel (Turso)
+
+En tu computadora la tienda usa el archivo `data/mochilas.db`. En Vercel hay que usar una base **compartida**, porque Vercel reparte
+las visitas entre varias copias del servidor y su disco (`/tmp`) no se comparte ni se conserva. Se usa **Turso** (libSQL, compatible
+con SQLite, plan gratuito). No hay que cambiar código: basta con dos variables de entorno.
+
+1. Crea una cuenta en [turso.tech](https://turso.tech) (puedes entrar con GitHub).
+2. Crea una base de datos (por ejemplo `mochilas-aventura-mx`) en la región **AWS US East (Virginia)**, la misma donde Vercel
+   ejecuta las funciones por omisión (`iad1`); así cada consulta tarda milisegundos.
+3. En la página de la base copia su **URL** (empieza con `libsql://`) y crea un **token** (*Create Token*, con permisos de lectura y escritura).
+4. En Vercel: *Project → Settings → Environment Variables*, agrega para **Production** y **Preview**:
+   - `TURSO_DATABASE_URL` = la URL `libsql://…`
+   - `TURSO_AUTH_TOKEN` = el token
+5. Vuelve a desplegar (*Deployments → … → Redeploy*). En la primera visita la tienda crea las tablas y carga los datos de ejemplo
+   **una sola vez**; desde ahí todo se conserva entre despliegues.
+
+Para usar la misma base desde tu computadora, pon esas dos variables en tu entorno (o en `.env`, ver `.env.example`).
+`npm run reset-db` solo reinicia la base **local**; para empezar de cero en Turso, borra y vuelve a crear la base en turso.tech.
+
+Cómo funciona: `src/db.js` usa `@libsql/client` (archivo local) o su versión web por HTTP (Turso, sin módulos nativos). Las
+consultas son asíncronas, las operaciones que deben ser todo o nada (pagar, cancelar, facturar…) van en transacciones de escritura,
+los datos de ejemplo se cargan en un solo lote atómico (si varias copias arrancan a la vez, solo una lo logra y las demás siguen sin
+error) y las fotos que se suben desde el panel se guardan en la propia base (tabla `archivos`).

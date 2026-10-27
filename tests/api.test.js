@@ -9,8 +9,12 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'mochilas-'));
 process.env.DB_PATH = path.join(tmp, 'test.db');
 process.env.NODE_ENV = 'test';
 
-const { app } = await import('../server.js');
-const { db } = await import('../src/db.js');
+const { app, prepararBD } = await import('../server.js');
+await prepararBD();
+// Las pruebas revisan la base con su PROPIA conexión (síncrona, misma API de siempre), como lo haría alguien externo.
+const Database = (await import('libsql')).default;
+const db = new Database(process.env.DB_PATH);
+db.exec('PRAGMA busy_timeout = 20000');
 
 let servidor, base;
 before(async () => {
@@ -404,8 +408,8 @@ test('Bases de datos anteriores: se actualizan nombres y descripciones sin pisar
   upd.run('tmp', cols[0].hex, cols[0].id); upd.run(cols[0].nombre, cols[0].hex, cols[1].id); upd.run(cols[1].nombre, cols[1].hex, cols[0].id);
   db.prepare("UPDATE productos SET nombre = 'Estuche editado por el admin' WHERE id = ?").run(estuche.id);
 
-  actualizarCatalogoBase();
-  actualizarCatalogoBase(); // idempotente
+  await actualizarCatalogoBase();
+  await actualizarCatalogoBase(); // idempotente
   assert.equal(prod('IN-003').nombre, 'Mochila verde de dinosaurios');
   assert.match(prod('IN-003').descripcion, /dinosaurios/);
   assert.equal(db.prepare('SELECT nombre FROM producto_colores WHERE producto_id = ? ORDER BY id').get(dino.id).nombre, 'Verde');
@@ -425,10 +429,53 @@ test('Vercel: varias copias del servidor arrancando a la vez sobre una BD nueva 
   });
   const resultados = await Promise.all(Array.from({ length: 8 }, arrancar));
   for (const r of resultados) assert.equal(r.codigo, 0, r.salida);
-  const Database = (await import('better-sqlite3')).default;
-  const otra = new Database(ruta, { readonly: true });
+  const otra = new Database(ruta);
   assert.equal(otra.prepare('SELECT COUNT(*) n FROM usuarios').get().n, 7);
   assert.equal(otra.prepare('SELECT COUNT(*) n FROM productos').get().n, 8);
   assert.equal(otra.prepare('SELECT COUNT(*) n FROM pedidos').get().n, 4);
   otra.close();
+});
+
+test('Varias copias del servidor con la misma base (Vercel + Turso): la sesión, el carrito y el pago funcionan en cualquiera', async () => {
+  const { spawn } = await import('node:child_process');
+  const raiz = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+  const ruta = path.join(tmp, 'compartida.db');
+  const procesos = [];
+  const arrancar = (puerto) => new Promise((listo, falla) => {
+    const p = spawn(process.execPath, ['server.js'], { cwd: raiz, env: { ...process.env, DB_PATH: ruta, NODE_ENV: 'development', PORT: String(puerto) } });
+    procesos.push(p);
+    let salida = '';
+    p.stdout.on('data', (d) => { salida += d; if (salida.includes('listo')) listo(`http://127.0.0.1:${puerto}/api`); });
+    p.stderr.on('data', (d) => { salida += d; });
+    p.on('exit', (c) => falla(new Error(`el servidor ${puerto} terminó (${c}): ${salida}`)));
+  });
+  try {
+    const [A, B] = await Promise.all([arrancar(41001 + Math.floor(Math.random() * 500)), arrancar(42001 + Math.floor(Math.random() * 500))]);
+    const jar = {};
+    const llamar = async (baseUrl, metodo, r, cuerpo) => {
+      const res = await fetch(baseUrl + r, {
+        method: metodo, body: cuerpo ? JSON.stringify(cuerpo) : undefined,
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch', Cookie: Object.entries(jar).map(([k, v]) => `${k}=${v}`).join('; ') },
+      });
+      for (const c of res.headers.getSetCookie?.() || []) { const [par] = c.split(';'); const i = par.indexOf('='); const v = par.slice(i + 1); if (v) jar[par.slice(0, i)] = v; else delete jar[par.slice(0, i)]; }
+      return { estado: res.status, datos: await res.json().catch(() => ({})) };
+    };
+    // inicia sesión en la copia A
+    assert.equal((await llamar(A, 'POST', '/auth/login', { correo: 'elizabeth.navarro@example.com', password: 'Cliente2026' })).estado, 200);
+    // la copia B reconoce la sesión (antes, en Vercel, cada copia tenía su propia base y aquí pedía iniciar sesión)
+    const sesionB = await llamar(B, 'GET', '/sesion');
+    assert.equal(sesionB.datos.usuario?.correo, 'elizabeth.navarro@example.com');
+    // agrega al carrito en B, paga en A
+    const dino = await llamar(B, 'GET', '/productos?q=dinosaurios');
+    assert.equal((await llamar(B, 'POST', '/carrito', { producto_id: dino.datos.productos[0].id, color: 'Verde', cantidad: 1 })).estado, 201);
+    const dirs = await llamar(B, 'GET', '/cuenta/direcciones');
+    const pago = await llamar(A, 'POST', '/checkout/pagar', { direccion_id: dirs.datos[0].id, tarjeta: TARJETA, acepta_politicas: true });
+    assert.equal(pago.estado, 201, JSON.stringify(pago.datos));
+    // el pedido se ve desde B y el carrito quedó vacío en las dos
+    assert.ok((await llamar(B, 'GET', '/pedidos')).datos.some((p) => p.folio === pago.datos.folio));
+    assert.equal((await llamar(A, 'GET', '/sesion')).datos.piezas, 0);
+    assert.equal((await llamar(B, 'GET', '/sesion')).datos.piezas, 0);
+  } finally {
+    for (const p of procesos) p.kill();
+  }
 });
