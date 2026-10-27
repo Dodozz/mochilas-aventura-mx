@@ -58,6 +58,9 @@ p { margin: 0 0 .8em; }
 .buscador input { width: 100%; border: 2px solid var(--navy); border-radius: 999px; padding: .6rem 1rem .6rem 2.6rem; font: inherit; background: var(--crema); min-height: 46px; }
 .buscador .ico { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; }
 .acciones { display: flex; align-items: center; gap: .2rem; }
+/* En el catálogo solo se muestra su propio buscador */
+body.en-catalogo .encabezado .buscador { display: none !important; }
+body.en-catalogo .encabezado .acciones { margin-left: auto; }
 .menu-cuenta { position: relative; }
 .btn-cuenta { display: flex; align-items: center; gap: .3rem; border: 0; background: none; font-weight: 700; padding: .5rem .6rem; border-radius: 999px; min-height: 44px; text-decoration: none; }
 .btn-cuenta:hover { background: var(--crema-2); }
@@ -127,6 +130,8 @@ main { min-height: 60vh; padding-bottom: 1rem; }
 .estrellas { display: inline-flex; gap: 1px; color: var(--navy); } .estrellas .ico { width: 17px; height: 17px; fill: currentColor; stroke: none; } .estrellas .vacia { color: #cfd5e2; }
 .prod .nombre { font-weight: 700; font-size: 1.08rem; text-decoration: none; }
 .prod .precio { font-weight: 800; font-size: 1.15rem; }
+.prod .resumen { margin: 0; color: var(--muted); font-size: .9rem; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.grid-prod.lista .prod .resumen { -webkit-line-clamp: 3; }
 .puntos { display: flex; gap: .45rem; margin: .2rem 0 .5rem; }
 .punto { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1.5px #c9ceda; padding: 0; cursor: pointer; }
 .punto.sel { box-shadow: 0 0 0 2.5px var(--naranja); }
@@ -173,6 +178,10 @@ main { min-height: 60vh; padding-bottom: 1rem; }
 .barra-cat { display: flex; flex-wrap: wrap; gap: .8rem; align-items: center; justify-content: space-between; margin-bottom: 1.2rem; }
 .barra-cat .buscar { flex: 1; min-width: 200px; max-width: 340px; position: relative; }
 .campo-ico { width: 100%; border: 1.5px solid var(--borde); background: #fff; border-radius: 12px; padding: .65rem .9rem; font: inherit; min-height: 46px; }
+.nota-busqueda { margin: -.3rem 0 1rem; padding: .6rem .9rem; background: #fff; border: 1px solid var(--borde); border-radius: 10px; font-size: .92rem; color: var(--texto); }
+.vacio .sugerencias { display: flex; flex-wrap: wrap; gap: .4rem; justify-content: center; align-items: center; }
+.vacio .chip { border: 1.5px solid var(--navy); background: #fff; border-radius: 999px; padding: .35rem .8rem; font: inherit; font-size: .9rem; cursor: pointer; }
+.vacio .chip:hover { background: var(--crema); }
 .barra-cat .buscar input { padding-left: 2.4rem; } .barra-cat .buscar .ico { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); width: 20px; height: 20px; color: var(--muted); }
 .vista-btns { display: inline-flex; border: 1.5px solid var(--borde); border-radius: 10px; overflow: hidden; background: #fff; }
 .vista-btns button { border: 0; background: none; padding: .5rem .7rem; display: grid; place-items: center; } .vista-btns button.on { background: var(--crema-2); }
@@ -328,7 +337,7 @@ body.modo-admin { background: var(--crema); }
 }
 @media (max-width: 860px) {
   .hamburguesa { display: inline-grid; }
-  .encabezado .fila { flex-wrap: wrap; padding: .4rem 0; min-height: 64px; }
+  .encabezado .fila { flex-wrap: wrap; padding: .4rem 0; min-height: 64px; gap: .5rem; }
   .nav-principal { display: none; width: 100%; order: 5; flex-direction: column; align-items: stretch; gap: 0; padding: .4rem 0 .8rem; } .nav-principal.abierto { display: flex; } .nav-principal a { padding: .8rem .4rem; border-bottom: 1px solid var(--borde); }
   .buscador { order: 4; max-width: none; width: 100%; flex-basis: 100%; margin: 0 0 .6rem; display: none; } .buscador.abierto { display: block; }
   .acciones { margin-left: auto; }
@@ -340,10 +349,30 @@ body.modo-admin { background: var(--crema); }
   .fila-campos, .fila-campos.tres { grid-template-columns: 1fr; } .fila-campos.mantener { grid-template-columns: 1fr 1fr; }
   .det-info { grid-template-columns: 1fr; } .linea { grid-template-columns: 96px 1fr; } .linea h3 { font-size: 1.15rem; }
   .pie-grid { grid-template-columns: 1fr; } .res-resumen { grid-template-columns: 1fr; }
-  .grid-prod { grid-template-columns: repeat(2, 1fr); gap: .8rem; } .prod .cuerpo { padding: .8rem; } .grid-prod.lista { grid-template-columns: 1fr; } .grid-prod.lista .prod .img { width: 130px; }
+  .grid-prod { grid-template-columns: repeat(2, 1fr); gap: .8rem; } .prod .cuerpo { padding: .8rem; } .prod .resumen { font-size: .82rem; } .grid-prod.lista { grid-template-columns: 1fr; } .grid-prod.lista .prod .img { width: 130px; }
   .cat.chica { grid-template-columns: 1fr; } .pasos .paso { font-size: .78rem; } .paso .c { width: 40px; height: 40px; } .pasos::before { top: 20px; }
   .etiqueta-amarilla { left: 0; } .mini-precio { left: 0; } .pedidos-grid { grid-template-columns: 1fr; }
   .play span { width: 76px; height: 56px; } .play svg { width: 32px; height: 32px; }
 }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
 @media print { .anuncio, .encabezado, .pie, .admin-lat, #toasts { display: none !important; } }
+
+@media (max-width: 860px) {
+  /* en celular la cuenta se muestra solo con la inicial (sin la flechita) para que el encabezado quepa en una línea */
+  .btn-cuenta .inicial ~ .ico { display: none; }
+  .btn-cuenta { padding: .3rem; }
+}
+/* Celulares angostos: el encabezado (menú, logo y 3 íconos) cabe en una sola línea */
+@media (max-width: 380px) {
+  .encabezado .fila { gap: .3rem; }
+  .encabezado .icon-btn { width: 40px; height: 40px; }
+  .encabezado .btn-cuenta { min-height: 40px; padding: .2rem .3rem; gap: .1rem; }
+  .encabezado .logo img { height: 40px; } .encabezado .logo { gap: .4rem; } .encabezado .logo .txt { font-size: .78rem; }
+}
+@media (max-width: 330px) { .encabezado .logo .txt { display: none; } }
+/* Tarjetas en dos columnas (celular): el botón cabe en una línea */
+@media (max-width: 640px) {
+  .grid-prod:not(.lista) .prod .btn { font-size: .88rem; padding-left: .5rem; padding-right: .5rem; white-space: nowrap; }
+  .grid-prod:not(.lista) .prod .btn .ico { display: none; }
+}
+@media (max-width: 350px) { .grid-prod:not(.lista) .prod .btn { font-size: .76rem; padding-left: .3rem; padding-right: .3rem; } }

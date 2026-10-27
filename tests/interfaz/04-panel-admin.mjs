@@ -54,13 +54,13 @@ llenar(w, q(w, '#f-prod'), { codigo: 'IN-001' }); await enviar(w, q(w, '#f-prod'
 chk(txt(w, '.panel-form').includes('Ya existe una mochila con ese código'), 'código único');
 
 console.log('INVENTARIO'); await ir(w, '/admin/inventario');
-chk(qa(w, '.alerta-inv').length === 3, `alertas: Espacial, Antirrobo y la nueva (${qa(w, '.alerta-inv').length})`);
-chk(txt(w, '.alerta-inv').includes('Antirrobo') || qa(w, '.alerta-inv').some((a) => a.textContent.includes('agotado')), 'alerta de agotado');
+chk(qa(w, '.alerta-inv').length === 3, `alertas: galaxia, antirrobo y la nueva (${qa(w, '.alerta-inv').length})`);
+chk(txt(w, '.alerta-inv').includes('antirrobo') || qa(w, '.alerta-inv').some((a) => a.textContent.includes('agotado')), 'alerta de agotado');
 f = q(w, '#f-ent'); llenar(w, f, { cantidad: '0' }); await enviar(w, f, 300);
 chk(!!q(w, '#f-ent .error'), 'entrada con 0 rechazada');
-const sel = q(w, '#mod'); sel.value = [...sel.options].find((o) => o.textContent.includes('Espacial')).value;
+const sel = q(w, '#mod'); sel.value = [...sel.options].find((o) => o.textContent.includes('galaxia')).value;
 llenar(w, f, { cantidad: '10' }); await enviar(w, f, 1000);
-chk(qa(w, '.alerta-inv').length === 2, 'la alerta de Espacial se quitó al superar el umbral');
+chk(qa(w, '.alerta-inv').length === 2, 'la alerta de la mochila de galaxia se quitó al superar el umbral');
 chk(txt(w, '.tabla').includes('+10'), 'movimiento registrado en la bitácora');
 
 console.log('DEVOLUCIONES / RESEÑAS / CONFIG / CORREOS'); await ir(w, '/admin/devoluciones');

@@ -1,4 +1,4 @@
-import { esc, $, $$, ico, get, errorCampo, marcarErrores } from './util.js';
+import { esc, $, $$, ico, get, errorCampo, marcarErrores, validarEnVivo } from './util.js';
 import { validarDireccion } from './validators.js';
 
 let cacheEstados = null;
@@ -39,8 +39,7 @@ export async function activarDireccion(form, valores = {}, { alCambiarEstado } =
   $('[name=cp]', form).addEventListener('input', (e) => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 5); });
   // Validación por campo al salir de él
   for (const n of ['estado_id', 'municipio_id', 'calle', 'colonia', 'cp']) {
-    const el = $(`[name=${n}]`, form);
-    el.addEventListener('blur', () => { const e = validarDireccion(leerDireccion(form)); errorCampo(el.closest('.campo'), e[n] || ''); });
+    validarEnVivo($(`[name=${n}]`, form), () => validarDireccion(leerDireccion(form))[n] || null);
   }
 }
 

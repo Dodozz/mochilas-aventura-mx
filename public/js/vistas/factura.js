@@ -1,4 +1,4 @@
-import { esc, $, ico, get, post, descargar, moneda, fecha, toast, errorToast, marcarErrores, errorCampo, datosForm } from '../util.js';
+import { esc, $, ico, get, post, descargar, moneda, fecha, toast, errorToast, marcarErrores, errorCampo, datosForm, validarEnVivo } from '../util.js';
 import { validarRFC, validarCP, validarTexto } from '../validators.js';
 import { formDireccion, activarDireccion, leerDireccion, validarFormDireccion, textoDireccion } from '../direccion.js';
 
@@ -33,9 +33,9 @@ export async function render(ctx) {
   const form = $('#f-fac'), cajaDir = $('#dir-nueva');
   await activarDireccion(cajaDir);
   const rfc = $('#rfc'); rfc.addEventListener('input', () => { rfc.value = rfc.value.toUpperCase().replace(/\s/g, ''); });
-  rfc.addEventListener('blur', () => errorCampo(rfc.closest('.campo'), validarRFC(rfc.value)));
+  validarEnVivo(rfc, validarRFC);
   $('#cp_fiscal').addEventListener('input', (e) => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 5); });
-  $('#cp_fiscal').addEventListener('blur', (e) => errorCampo(e.target.closest('.campo'), validarCP(e.target.value)?.replace('El código postal', 'El código postal fiscal')));
+  validarEnVivo($('#cp_fiscal'), (v) => validarCP(v)?.replace('El código postal', 'El código postal fiscal') || null);
   const sel = $('#dir_sel'); const alt = () => cajaDir.classList.toggle('oculto', sel.value !== 'nueva'); sel.addEventListener('change', alt); if (!dirs.length) { sel.value = 'nueva'; } alt();
 
   form.addEventListener('submit', async (e) => {

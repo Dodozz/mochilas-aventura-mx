@@ -48,9 +48,9 @@ llenar(w, f, { motivo: 'No es lo que pedí' }); await enviar(w, f, 1000);
 chk(!q(w, '.modal') && qa(w, '.pedido-card').find((c) => pillDe(c) === 'Entregado').textContent.includes('pendiente'), 'solicitud enviada: pendiente');
 
 console.log('RESEÑA'); await ir(w, '/producto/1');
-chk(!q(w, '#f-res'), 'Rosa Floral: ya reseñada por la clienta? (no)'); 
+chk(!q(w, '#f-res'), 'Mochila rosa de flores: ya reseñada por la clienta? (no)'); 
 await ir(w, '/producto/4');
-chk(!!q(w, '#f-res') === false, 'Espacial: aún no entregada → sin formulario');
+chk(!!q(w, '#f-res') === false, 'Mochila de galaxia: aún no entregada → sin formulario');
 chk(txt(w, '#res-cont').includes('Solo los clientes que ya recibieron'), 'mensaje de compra completada');
 // Dinos entregado pero con devolución: aún puede reseñar
 await ir(w, '/producto/3');

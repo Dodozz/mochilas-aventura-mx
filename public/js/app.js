@@ -56,7 +56,7 @@ function pintarEncabezado() {
         ${cats.map((c) => `<a href="/catalogo?categoria=${c.id}" data-link>${esc(c.nombre)}</a>`).join('')}
         <a href="/catalogo" data-link>Todo</a>
       </nav>
-      <form class="buscador" id="buscar-form" role="search">${ico('buscar')}<input type="search" name="q" placeholder="Busca tu mochila" aria-label="Buscar mochilas" autocomplete="off" value="${esc(new URLSearchParams(location.search).get('q') || '')}"></form>
+      <form class="buscador" id="buscar-form" role="search">${ico('buscar')}<input type="search" name="q" placeholder="Busca tu mochila" aria-label="Buscar mochilas" autocomplete="off"></form>
       <div class="acciones">
         <button class="icon-btn" id="btn-buscar-m" aria-label="Buscar" style="display:none">${ico('buscar')}</button>
         <a class="icon-btn" href="/cuenta/favoritos" data-link aria-label="Favoritos">${ico('corazon')}</a>
@@ -108,13 +108,15 @@ async function pintarRuta() {
   }
   const esAdmin = modulo === 'admin';
   document.body.classList.toggle('modo-admin', esAdmin);
+  // El catálogo tiene su propio buscador (con filtros y resultados al teclear): se oculta el del encabezado para no duplicarlo.
+  document.body.classList.toggle('en-catalogo', modulo === 'catalogo');
   if (esAdmin) {
     if (!$('#admin-raiz')) app.innerHTML = '<div id="admin-raiz"></div>';
   } else if (!$('#contenido')) {
     app.innerHTML = '<div id="encabezado"></div><main id="contenido" tabindex="-1"></main><div id="pie"></div>';
     pintarEncabezado(); pintarPie();
-  } else { // actualiza el valor del buscador cuando cambia la URL
-    const inp = $('#buscar-form input'); if (inp && modulo !== 'catalogo') inp.value = '';
+  } else { // al salir del catálogo el buscador del encabezado vuelve vacío
+    const inp = $('#buscar-form input'); if (inp) inp.value = '';
   }
   const contenedor = esAdmin ? $('#admin-raiz') : $('#contenido');
   contenedor.innerHTML = '<div class="cargando"><div class="spinner"></div>Cargando…</div>';

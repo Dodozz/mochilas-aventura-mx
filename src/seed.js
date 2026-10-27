@@ -27,16 +27,33 @@ const CATEGORIAS = [
 ];
 
 // [codigo, nombre, categoria, forma, largo, alto, ancho, material, colores, precio, existencias, destacada, descripcion, coleccion]
+// Los nombres dicen QUÉ es el producto (tipo + color o tema) y la descripción explica para quién es y qué incluye:
+// el buscador usa ambos, así que conviene redactarlos con las palabras que usaría un cliente.
+// El primer color de cada producto es el que aparece en su foto.
 const PRODUCTOS = [
-  ['IN-001', 'Rosa Floral', 'Infantil', 'mochila', 30, 42, 17, 'Poliéster', ['Rosa', 'Lila'], 649, 20, 1, 'Mochila escolar de diseño floral con compartimento principal amplio, bolsillos frontales con cierre y correas acolchadas ajustables. Ideal para llevar libros, cuadernos y todo lo necesario para el día.', 'Jardín'],
-  ['IN-002', 'Unicornio con Ruedas', 'Infantil', 'ruedas', 32, 45, 20, 'Nailon', ['Morado', 'Rosa'], 799, 12, 0, 'Mochila con ruedas y asa telescópica para que los más pequeños no carguen peso. Diseño de unicornio, bolsillo lateral para botella y reflejantes de seguridad.', 'Fantasía'],
-  ['IN-003', 'Dinos', 'Infantil', 'mochila', 30, 42, 17, 'Poliéster', ['Azul', 'Verde'], 599, 25, 1, 'La mochila escolar Dinos es perfecta para los pequeños exploradores. Confeccionada con materiales resistentes y un diseño divertido, cuenta con amplio espacio, correas acolchadas ajustables y bolsillos laterales para botellas. Ideal para llevar libros, cuadernos y todo lo necesario para la escuela y aventuras diarias.', 'Exploradores'],
-  ['IN-004', 'Espacial con Ruedas', 'Infantil', 'ruedas', 32, 45, 20, 'Nailon', ['Azul marino', 'Gris'], 749, 3, 1, 'Mochila con ruedas de estampado espacial, asa telescópica y compartimentos organizados. Cuenta con franjas reflejantes y base reforzada para el uso diario.', 'Espacio'],
-  ['JU-001', 'Urbana Laptop 15.6"', 'Juvenil', 'mochila', 33, 46, 19, 'Nailon impermeable', ['Negro', 'Gris'], 549, 18, 1, 'Mochila urbana con compartimento acolchado para laptop de hasta 15.6", puerto de carga USB externo y tela impermeable. Respaldo ventilado y correas ergonómicas.', 'Urbana'],
-  ['JU-002', 'Antirrobo USB', 'Juvenil', 'mochila', 32, 44, 16, 'Poliéster', ['Negro', 'Azul marino'], 629, 0, 0, 'Mochila con cierre oculto antirrobo en la parte trasera, puerto USB de carga y bolsillo acolchado para laptop. Pensada para el traslado diario en la ciudad.', 'Urbana'],
-  ['AC-001', 'Lonchera Térmica', 'Accesorios', 'lonchera', 22, 18, 12, 'Poliéster', ['Azul', 'Rosa'], 199, 30, 0, 'Lonchera con aislamiento térmico que conserva los alimentos frescos por más tiempo. Interior fácil de limpiar, cierre reforzado y asa de mano.', 'Escolar'],
-  ['AC-002', 'Estuche Doble', 'Accesorios', 'estuche', 22, 8, 6, 'Poliéster', ['Rojo', 'Negro'], 99, 40, 0, 'Estuche de dos compartimentos con cierres independientes para separar lápices, plumas y colores. Compacto y resistente.', 'Escolar'],
+  ['IN-001', 'Mochila rosa de flores', 'Infantil', 'mochila', 30, 42, 17, 'Poliéster', ['Rosa', 'Lila'], 649, 20, 1,
+    'Mochila escolar rosa con estampado de flores, pensada para niñas y niños de primaria. Tiene compartimento principal amplio para libros y cuadernos, bolsillo frontal con cierre, bolsillos laterales para botella de agua y correas acolchadas ajustables. Disponible en rosa y lila.', 'Jardín'],
+  ['IN-002', 'Mochila con ruedas de unicornio', 'Infantil', 'ruedas', 32, 45, 20, 'Nailon', ['Morado', 'Rosa'], 799, 12, 0,
+    'Mochila con ruedas y estampado de unicornio para que los más pequeños no carguen peso en la espalda. Incluye asa telescópica, bolsillo lateral para botella de agua y franjas reflejantes de seguridad para el camino a la escuela. Disponible en morado y rosa.', 'Fantasía'],
+  ['IN-003', 'Mochila verde de dinosaurios', 'Infantil', 'mochila', 30, 42, 17, 'Poliéster', ['Verde', 'Azul'], 599, 25, 1,
+    'Mochila escolar con estampado de dinosaurios (T-rex, triceratops y estegosaurio) para pequeños exploradores. Está hecha de poliéster resistente y tiene compartimento principal amplio, dos bolsillos frontales, bolsillos laterales para botella de agua y correas acolchadas ajustables. Ideal para la escuela y las aventuras de todos los días. Disponible en verde y azul.', 'Exploradores'],
+  ['IN-004', 'Mochila con ruedas de galaxia', 'Infantil', 'ruedas', 32, 45, 20, 'Nailon', ['Azul marino', 'Gris'], 749, 3, 1,
+    'Mochila con ruedas y estampado de galaxia con cohetes, planetas y astronautas. Tiene asa telescópica, compartimentos para organizar los útiles, base reforzada y franjas reflejantes para el camino a la escuela. Disponible en azul marino y gris.', 'Espacio'],
+  ['JU-001', 'Mochila gris para laptop 15.6"', 'Juvenil', 'mochila', 33, 46, 19, 'Nailon impermeable', ['Gris', 'Negro'], 549, 18, 1,
+    'Mochila juvenil para laptop de hasta 15.6 pulgadas, ideal para la secundaria, la prepa, la universidad o el trabajo. Tiene compartimento acolchado para la computadora, puerto USB externo para cargar el celular, tela impermeable, respaldo ventilado y correas ergonómicas. Disponible en gris y negro.', 'Urbana'],
+  ['JU-002', 'Mochila negra antirrobo con USB', 'Juvenil', 'mochila', 32, 44, 16, 'Poliéster', ['Negro', 'Azul marino'], 629, 0, 0,
+    'Mochila antirrobo con el cierre oculto contra la espalda para que nadie la abra sin que te des cuenta. Incluye puerto USB de carga, bolsillo acolchado para laptop y bolsillo secreto para cartera y celular. Pensada para moverte seguro por la ciudad y en el transporte público. Disponible en negro y azul marino.', 'Urbana'],
+  ['AC-001', 'Lonchera térmica escolar', 'Accesorios', 'lonchera', 22, 18, 12, 'Poliéster', ['Azul', 'Rosa'], 199, 30, 0,
+    'Lonchera térmica para llevar el almuerzo o el refrigerio a la escuela o al trabajo. Su aislamiento conserva la comida fría o caliente por más tiempo, el forro interior se limpia fácilmente y tiene cierre reforzado y asa de mano. Disponible en azul y rosa.', 'Escolar'],
+  ['AC-002', 'Estuche doble para lápices', 'Accesorios', 'estuche', 22, 8, 6, 'Poliéster', ['Rojo', 'Negro'], 99, 40, 0,
+    'Estuche escolar con dos compartimentos y cierres independientes para separar lápices, plumas, colores, goma y sacapuntas. Es compacto, resistente y cabe en cualquier mochila. Disponible en rojo y negro.', 'Escolar'],
 ];
+
+// Nombres con los que se sembraron las primeras versiones (para actualizar bases de datos ya creadas).
+const NOMBRES_ANTERIORES = {
+  'IN-001': 'Rosa Floral', 'IN-002': 'Unicornio con Ruedas', 'IN-003': 'Dinos', 'IN-004': 'Espacial con Ruedas',
+  'JU-001': 'Urbana Laptop 15.6"', 'JU-002': 'Antirrobo USB', 'AC-001': 'Lonchera Térmica', 'AC-002': 'Estuche Doble',
+};
 
 const REGIMENES = [
   ['601', 'General de Ley Personas Morales'], ['603', 'Personas Morales con Fines no Lucrativos'],
@@ -53,6 +70,42 @@ const USOS = [
 export function sembrarSiVacio() {
   const { n } = db.prepare('SELECT COUNT(*) n FROM usuarios').get();
   if (n === 0) sembrar();
+  else actualizarCatalogoBase();
+}
+
+/**
+ * Bases de datos creadas con la versión anterior: renombra los productos base y les pone la descripción nueva,
+ * solo si el administrador no los ha modificado (su nombre sigue siendo el original). También corrige el orden
+ * de colores cuyo primer color no coincidía con su foto (Dinos y Urbana). Es idempotente.
+ */
+export function actualizarCatalogoBase() {
+  transaccion(() => {
+    for (const [cod, nom, , , , , , , cols, , , , desc] of PRODUCTOS) {
+      const p = db.prepare('SELECT id, nombre FROM productos WHERE codigo = ?').get(cod);
+      if (!p || p.nombre !== NOMBRES_ANTERIORES[cod]) continue;
+      db.prepare('UPDATE productos SET nombre = ?, descripcion = ? WHERE id = ?').run(nom, desc, p.id);
+      db.prepare('UPDATE pedido_items SET nombre = ? WHERE producto_id = ? AND nombre = ?').run(nom, p.id, NOMBRES_ANTERIORES[cod]);
+      // El color que muestra la foto real pasa a ser el primero (se intercambian nombre y tono entre los dos registros).
+      const filas = db.prepare('SELECT id, nombre, hex, foto FROM producto_colores WHERE producto_id = ? ORDER BY id').all(p.id);
+      const conFoto = filas[0]?.foto?.startsWith('/img/productos/');
+      if (conFoto && filas.length > 1 && filas[0].nombre === cols[1] && filas[1].nombre === cols[0]) {
+        const upd = db.prepare('UPDATE producto_colores SET nombre = ?, hex = ? WHERE id = ?');
+        upd.run('__intercambio__', filas[0].hex, filas[0].id); // el nombre de color es único por producto
+        upd.run(filas[0].nombre, filas[0].hex, filas[1].id);
+        upd.run(filas[1].nombre, filas[1].hex, filas[0].id);
+        // la ilustración del segundo color tenía los tonos al revés: se invierten c1 y c2
+        const ilus = filas[1].foto;
+        if (ilus?.startsWith('/api/ilustracion/')) {
+          const u = new URL(ilus, 'http://x');
+          const [c1, c2] = [u.searchParams.get('c1'), u.searchParams.get('c2')];
+          u.searchParams.set('c1', c2); u.searchParams.set('c2', c1);
+          const nueva = u.pathname + u.search;
+          db.prepare('UPDATE producto_colores SET foto = ? WHERE id = ?').run(nueva, filas[1].id);
+          db.prepare('UPDATE producto_fotos SET url = ? WHERE producto_id = ? AND url = ?').run(nueva, p.id, ilus);
+        }
+      }
+    }
+  });
 }
 
 export function sembrar() {
@@ -145,9 +198,9 @@ export function sembrar() {
       db.prepare('INSERT INTO pedido_historial(pedido_id,estatus,nota,autor,fecha) VALUES(?,?,?,?,?)').run(pid, 'pagado', 'Pedido recibido y pago aprobado', 'Sistema', creado);
       return pid;
     };
-    crearPedido(cli, 'entregado', hace(8), [['IN-003', 'Azul', 1]], hace(3));
+    crearPedido(cli, 'entregado', hace(8), [['IN-003', 'Verde', 1]], hace(3));
     crearPedido(cli, 'enviado', hace(2), [['IN-001', 'Rosa', 1], ['AC-002', 'Rojo', 1]]);
-    crearPedido(cli, 'preparando', hace(0, 3), [['JU-001', 'Negro', 1]], null, 0);
+    crearPedido(cli, 'preparando', hace(0, 3), [['JU-001', 'Gris', 1]], null, 0);
     crearPedido(cli, 'pagado', hace(0, 1), [['IN-004', 'Azul marino', 1], ['AC-002', 'Rojo', 1]], null, 0);
 
     // ---- Reseñas de ejemplo (con la insignia "Verificado")
