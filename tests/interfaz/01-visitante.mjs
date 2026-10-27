@@ -5,6 +5,11 @@ chk(qa(w, '#destacadas .prod').length === 4, '4 destacadas');
 chk(qa(w, '.faq-item').length === 6, '6 preguntas frecuentes');
 chk(txt(w, '.anuncio').includes('$999'), 'barra de envío gratis');
 chk(qa(w, '.cat').length === 3, '3 categorías');
+// sección de video: portada limpia, un solo título y tres videos cortos alineados
+chk(q(w, '.video-main img')?.getAttribute('src') === '/img/home/video-portada.jpg' && qa(w, '.vm-tit').length === 1 && txt(w, '.vm-tit') === 'Míralas en acción', 'video: portada limpia con un solo título');
+chk(qa(w, '.mini-video').length === 3 && qa(w, '.mini-video img').every((i) => /\/img\/home\/mini-/.test(i.getAttribute('src'))), 'video: 3 videos cortos con miniaturas limpias');
+chk(qa(w, '.mini-txt b').map((b) => b.textContent).join('|') === 'Mochila de viaje compacta|Estilo urbano|Aventura en la montaña', 'video: títulos de los videos cortos');
+chk(qa(w, '.video-grid a[target=_blank]').every((a) => a.rel.includes('noopener')), 'video: enlaces externos en pestaña nueva y seguros');
 console.log('CATÁLOGO'); await ir(w, '/catalogo');
 chk(qa(w, '#resultado .prod').length === 8, `8 mochilas (hay ${qa(w, '#resultado .prod').length})`);
 chk(qa(w, '.prod.agotado').length === 1, 'una agotada');

@@ -4,16 +4,33 @@ import { faqHtml, activarFaq } from './info.js';
 const IMG_CAT = { infantil: '/img/home/cat-infantil.jpg', juvenil: '/img/home/cat-juvenil.jpg', accesorios: '/img/home/cat-accesorios.jpg' };
 const norm = (s) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
+const PLAY = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.2-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg>';
+const PORTADA = '/img/home/video-portada.jpg';
+
+/** Portada del video: foto limpia (ciudad | montaña) con título, etiquetas y botón de reproducir en HTML. */
+const portada = () => `<img src="${PORTADA}" alt="Una persona con mochila en la ciudad y otra en la montaña" loading="lazy">
+  <span class="vm-etq izq" aria-hidden="true">En la ciudad</span><span class="vm-etq der" aria-hidden="true">En la montaña</span>
+  <span class="vm-play" aria-hidden="true">${PLAY}</span>
+  <span class="vm-pie"><span class="vm-tit">Míralas en acción</span><span class="vm-sub">Nuestras mochilas en el día a día, de la ciudad a la montaña</span></span>`;
+
 /** RF-16 CA2: video real de la tienda. Admite YouTube, archivo .mp4/.webm o enlace a la red social. */
 function bloqueVideo(url) {
   const yt = /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([\w-]{11})/.exec(url);
-  const poster = '/img/home/video-poster.jpg';
-  if (/\.(mp4|webm)(\?|$)/i.test(url)) return `<div class="video-main"><video controls preload="metadata" poster="${poster}" aria-label="Mochilas Aventura MX en acción"><source src="${esc(url)}"></video></div>`;
-  if (yt) {
-    return `<div class="video-main" id="video-yt" data-id="${yt[1]}"><img src="${poster}" alt="Miniatura del video Míralas en acción"><span class="play"><span>${'<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>'}</span></span><span class="tit">Míralas en acción</span><button class="solo-lector" id="play-yt">Reproducir video</button></div>`;
+  if (/\.(mp4|webm)(\?|$)/i.test(url)) {
+    return `<div class="video-main es-video"><video controls preload="metadata" poster="${PORTADA}" aria-label="Mochilas Aventura MX en acción"><source src="${esc(url)}"></video></div>`;
   }
-  return `<a class="video-main" href="${esc(url)}" target="_blank" rel="noopener noreferrer" aria-label="Ver el video de Mochilas Aventura MX en su red social"><img src="${poster}" alt="Personas usando mochilas en la ciudad y la montaña" loading="lazy"><span class="play"><span><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></span></span><span class="tit">Míralas en acción</span></a>`;
+  if (yt) {
+    return `<div class="video-main con-portada" id="video-yt" data-id="${yt[1]}">${portada()}<button type="button" class="vm-boton" aria-label="Reproducir el video Míralas en acción"></button></div>`;
+  }
+  return `<a class="video-main con-portada" href="${esc(url)}" target="_blank" rel="noopener noreferrer" aria-label="Ver el video Míralas en acción en la red social de la tienda (se abre en una pestaña nueva)">${portada()}</a>`;
 }
+
+// Videos cortos de la columna derecha (enlazan a la cuenta de TikTok de la tienda)
+const MINI_VIDEOS = [
+  ['mini-viaje', 'Mochila de viaje compacta', 'Cómo empacar todo para tu próximo viaje'],
+  ['mini-urbano', 'Estilo urbano', 'Mochilas para moverte por la ciudad'],
+  ['mini-montana', 'Aventura en la montaña', 'Listas para acampar y explorar'],
+];
 
 export async function render(ctx) {
   ctx.titulo('');
@@ -51,9 +68,12 @@ export async function render(ctx) {
 
     <section class="seccion" aria-labelledby="h-video"><h2 class="solo-lector" id="h-video">Videos de las mochilas</h2>
       <div class="video-grid">${bloqueVideo(t.video_url)}
-        <div class="video-lado"><h3>Síguenos para ver más videos</h3>
-          <div class="redes">${['instagram', 'facebook', 'tiktok', 'x', 'whatsapp'].map((k) => `<a href="${esc(r[k])}" target="_blank" rel="noopener noreferrer" aria-label="${k} de ${esc(t.nombre)}">${icoRed(k)}</a>`).join('')}</div>
-          ${[['vid-viaje', 'Mochila de Viaje Compacta'], ['vid-urbano', 'Estilo Urbano'], ['vid-montana', 'Aventura en la Montaña']].map(([f, n]) => `<a class="mini-video" href="${esc(r.tiktok)}" target="_blank" rel="noopener noreferrer"><img src="/img/home/${f}.jpg" alt="" loading="lazy"><b>${n}</b><i>${ico('flecha_der')}</i></a>`).join('')}</div></div></section>
+        <div class="video-lado">
+          <div class="video-lado-cab"><h3>Síguenos para ver más videos</h3>
+            <div class="redes">${[['instagram', 'Instagram'], ['facebook', 'Facebook'], ['tiktok', 'TikTok'], ['x', 'X'], ['whatsapp', 'WhatsApp']].map(([k, n]) => `<a href="${esc(r[k])}" target="_blank" rel="noopener noreferrer" aria-label="${n} de ${esc(t.nombre)}">${icoRed(k)}</a>`).join('')}</div></div>
+          <ul class="mini-lista">${MINI_VIDEOS.map(([f, n, d]) => `<li><a class="mini-video" href="${esc(r.tiktok)}" target="_blank" rel="noopener noreferrer" aria-label="${esc(n)}: ver en TikTok (se abre en una pestaña nueva)">
+            <span class="mini-img"><img src="/img/home/${f}.jpg" alt="" loading="lazy"><span class="mp" aria-hidden="true">${PLAY}</span></span>
+            <span class="mini-txt"><b>${esc(n)}</b><small>${esc(d)}</small></span><i aria-hidden="true">${ico('flecha_der')}</i></a></li>`).join('')}</ul></div></div></section>
 
     <section class="seccion">${faqHtml()}</section>
   </div>`;
@@ -62,5 +82,8 @@ export async function render(ctx) {
   const grid = $('#destacadas', ctx.contenedor);
   if (grid) activarTarjetas(grid, { navegar: ctx.navegar, refrescarCarrito: ctx.refrescarCarrito });
   const yt = $('#video-yt', ctx.contenedor);
-  if (yt) yt.addEventListener('click', () => { yt.innerHTML = `<iframe src="https://www.youtube-nocookie.com/embed/${yt.dataset.id}?autoplay=1" title="Mochilas Aventura MX en acción" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen loading="lazy"></iframe>`; });
+  if (yt) yt.addEventListener('click', () => {
+    yt.classList.remove('con-portada'); yt.classList.add('es-video');
+    yt.innerHTML = `<iframe src="https://www.youtube-nocookie.com/embed/${yt.dataset.id}?autoplay=1" title="Mochilas Aventura MX en acción" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
+  }, { once: true });
 }

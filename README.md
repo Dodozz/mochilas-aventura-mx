@@ -40,7 +40,7 @@ vencimiento futuro (ej. `12/30`) y CVV de 3 dígitos.
 
 ```bash
 npm test          # 21 pruebas de la API (rápidas)
-npm run test:ui   # 5 recorridos de la interfaz real (165 verificaciones) con jsdom
+npm run test:ui   # 5 recorridos de la interfaz real (169 verificaciones) con jsdom
 ```
 
 `npm test` ejecuta 21 pruebas contra la API real (registro, correo duplicado, carrito y límites, pago, descuento de stock en transacción,
@@ -74,7 +74,7 @@ tests/interfaz/           Recorridos de la interfaz (jsdom)
 |---|---|
 | **RF-1** Registro, acceso y roles | `/registro`, `/login`. Correo único sin distinguir mayúsculas; mensaje genérico al fallar el acceso; el rol vive en la BD; el carrito del visitante se conserva al registrarse o entrar y se regresa a la pantalla de origen |
 | **RF-2** Encabezado | Logo, buscador, categorías, favoritos, carrito con contador, "Hola, Nombre" con menú; en móvil menú desplegable y solo la inicial (cabe en una línea desde 320 px). Se queda fijo arriba al bajar y se vuelve compacto; el menú del celular se cierra al cambiar de pantalla. En `/catalogo` el buscador del encabezado se oculta para no duplicar el del catálogo |
-| **RF-3 / RF-11 / RF-16** Inicio, destacadas, redes y video | `/`: banner, categorías, destacadas elegidas por el admin (nunca agotadas ni ocultas), sección de video + redes (se abren en pestaña nueva), compartir mochila |
+| **RF-3 / RF-11 / RF-16** Inicio, destacadas, redes y video | `/`: banner, categorías, destacadas elegidas por el admin (nunca agotadas ni ocultas), sección de video (portada limpia ciudad/montaña con título y botón en HTML; un enlace de YouTube se reproduce ahí mismo y un `.mp4` con su póster) + redes y 3 videos cortos a la misma altura del video (se abren en pestaña nueva), compartir mochila |
 | **RF-4** Catálogo y detalle | `/catalogo` (búsqueda inteligente, categorías, precio, disponibilidad, orden, cuadrícula/lista, paginación; cada tarjeta muestra una descripción breve) y `/producto/:id` (galería, color, medidas Largo/Alto/Ancho, acordeones) |
 | **RF-5** Carrito | Cantidad con menú 1–4 que también se puede escribir (solo enteros, mínimo 1, máximo 10 o las existencias, corrige con aviso), suma de línea repetida, aviso de envío gratis, IVA solo informativo, vigencia de 7 días |
 | **RF-6 / RF-7** Pago y envíos | `/checkout/entrega` → `/checkout/pago` → confirmación (4 pasos). Zona automática por estado, validación en pantalla **y** servidor, pago simulado |
