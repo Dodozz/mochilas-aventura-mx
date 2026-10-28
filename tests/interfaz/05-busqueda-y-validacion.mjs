@@ -77,4 +77,17 @@ chk(!!errorDe(w, 'correo'), 'correo vacío → error');
 escribir(w, q(w, '[name=correo]'), 'elizabeth.navarro@example.com');
 chk(!errorDe(w, 'correo'), 'al escribir un correo válido el error se quita');
 
+console.log('SESIÓN VENCIDA');
+await ir(w, '/login');
+const fs2 = q(w, '#contenido form');
+escribir(w, fs2.querySelector('[name=correo]'), 'elizabeth.navarro@example.com');
+escribir(w, fs2.querySelector('[name=password]'), 'Cliente2026');
+fs2.dispatchEvent(new w.Event('submit', { bubbles: true, cancelable: true })); await wait(800); await esperar(w);
+chk(txt(w, '#btn-cuenta').includes('Hola, Elizabeth'), 'sesión iniciada');
+const { db: bd } = await import('../../src/db.js');
+await bd.prepare('DELETE FROM sesiones').run(); // la sesión termina en el servidor
+await ir(w, '/cuenta/pedidos'); await wait(900); await esperar(w);
+chk(w.location.pathname === '/login' && w.location.search.includes('volver=%2Fcuenta%2Fpedidos'), `pide iniciar sesión y recuerda a dónde volver (${w.location.pathname}${w.location.search})`);
+chk(!txt(w, '#encabezado').includes('Hola, Elizabeth') && !!q(w, 'a.btn-cuenta[href="/login"]'), 'el encabezado ya no dice "Hola, Elizabeth"');
+
 resumen();

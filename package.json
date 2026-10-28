@@ -15,15 +15,16 @@
     "node": ">=18"
   },
   "dependencies": {
+    "@libsql/client": "^0.15.15",
     "bcryptjs": "^2.4.3",
-    "better-sqlite3": "^11.7.0",
     "compression": "^1.8.2",
     "express": "^4.21.2",
     "nodemailer": "^6.9.16",
     "pdfkit": "^0.15.2"
   },
   "devDependencies": {
+    "esbuild": "^0.24.0",
     "jsdom": "^25.0.1",
-    "esbuild": "^0.24.0"
+    "libsql": "^0.5.29"
   }
 }

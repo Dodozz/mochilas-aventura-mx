@@ -27,9 +27,9 @@ function ponerCookie(res, nombre, valor, { dias = 30, borrar = false } = {}) {
 }
 
 /** Crea una sesión para el usuario y la deja en la cookie `sid`. */
-export function iniciarSesion(res, usuarioId) {
+export async function iniciarSesion(res, usuarioId) {
   const token = crypto.randomBytes(32).toString('hex');
-  db.prepare('INSERT INTO sesiones(token_hash, usuario_id, expira_en) VALUES(?,?,?)').run(
+  await db.prepare('INSERT INTO sesiones(token_hash, usuario_id, expira_en) VALUES(?,?,?)').run(
     sha256(token),
     usuarioId,
     new Date(Date.now() + config.duracionSesionDias * DIA_MS).toISOString()
@@ -37,9 +37,9 @@ export function iniciarSesion(res, usuarioId) {
   ponerCookie(res, 'sid', token, { dias: config.duracionSesionDias });
 }
 
-export function cerrarSesion(req, res) {
+export async function cerrarSesion(req, res) {
   const token = leerCookies(req).sid;
-  if (token) db.prepare('DELETE FROM sesiones WHERE token_hash = ?').run(sha256(token));
+  if (token) await db.prepare('DELETE FROM sesiones WHERE token_hash = ?').run(sha256(token));
   ponerCookie(res, 'sid', '', { borrar: true });
 }
 
@@ -47,7 +47,7 @@ export function cerrarSesion(req, res) {
  * Identifica al visitante (cookie `vid`, para su carrito) y al usuario con sesión (cookie `sid`).
  * El ROL se lee de la base de datos en CADA petición (RNF-4 CA3): nunca se confía en el navegador.
  */
-export function identificar(req, res, next) {
+export async function identificar(req, res, next) {
   const cookies = leerCookies(req);
   let vid = cookies.vid;
   if (!vid || !/^[a-f0-9]{32}$/.test(vid)) {
@@ -57,7 +57,7 @@ export function identificar(req, res, next) {
   req.visitante = vid;
   req.usuario = null;
   if (cookies.sid) {
-    const fila = db
+    const fila = await db
       .prepare(
         `SELECT u.id, u.nombres, u.apellido_paterno, u.apellido_materno, u.correo, u.telefono, u.rol
            FROM sesiones s JOIN usuarios u ON u.id = s.usuario_id

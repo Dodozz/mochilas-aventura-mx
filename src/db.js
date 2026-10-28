@@ -1,23 +1,132 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import Database from 'better-sqlite3';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { config } from './config.js';
 
-fs.mkdirSync(path.dirname(config.rutaBD), { recursive: true });
+// ---------------------------------------------------------------------
+// Conexión
+// - En tu computadora (y en las pruebas): archivo SQLite local (data/mochilas.db).
+// - En Vercel: base de datos COMPARTIDA en Turso (libSQL, compatible con SQLite) si existen las variables
+//   TURSO_DATABASE_URL y TURSO_AUTH_TOKEN. Así todas las copias del servidor ven las mismas sesiones,
+//   carritos, cuentas y pedidos, y nada se borra al desplegar. Sin esas variables, Vercel usa /tmp
+//   (solo sirve como demostración: cada copia tiene su propia base y se borra).
+// ---------------------------------------------------------------------
+export const remoto = !!process.env.TURSO_DATABASE_URL;
+if (!remoto) fs.mkdirSync(path.dirname(config.rutaBD), { recursive: true });
 fs.mkdirSync(config.carpetaSubidas, { recursive: true });
 
-// timeout: si otra copia del servidor está escribiendo (p. ej. sembrando al arrancar en Vercel), se espera hasta 20 s
-// en lugar de fallar de inmediato con SQLITE_BUSY.
-export const db = new Database(config.rutaBD, { timeout: 20000 });
-db.pragma('busy_timeout = 20000');
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
+// Con Turso se usa el cliente "web" (HTTP puro, sin módulos nativos): funciona en Vercel sin compilar nada.
+// En local se usa el cliente normal, que abre el archivo SQLite con el módulo nativo de libsql.
+let cliente = null;
+let creando = null;
+function obtenerCliente() {
+  if (cliente) return Promise.resolve(cliente);
+  creando ??= (remoto ? import('@libsql/client/web') : import('@libsql/client')).then(({ createClient }) => {
+    cliente = createClient(remoto
+      ? { url: process.env.TURSO_DATABASE_URL, authToken: process.env.TURSO_AUTH_TOKEN, intMode: 'number' }
+      : { url: `file:${config.rutaBD}`, intMode: 'number' });
+    return cliente;
+  });
+  return creando;
+}
+
+// En modo local cada conexión nueva necesita: esperar si otra conexión está escribiendo (en vez de fallar con
+// SQLITE_BUSY) y llaves foráneas activas. El cliente abre una conexión nueva después de cada transacción.
+const PRAGMAS_LOCALES = 'PRAGMA busy_timeout = 20000; PRAGMA foreign_keys = ON;';
+async function prepararConexionLocal() { if (!remoto) await (await obtenerCliente()).executeMultiple(PRAGMAS_LOCALES); }
+
+// ---------------------------------------------------------------------
+// API parecida a better-sqlite3, pero asíncrona:
+//   await db.prepare(sql).get(...params)   → primera fila u undefined
+//   await db.prepare(sql).all(...params)   → arreglo de filas
+//   await db.prepare(sql).run(...params)   → { changes, lastInsertRowid }
+// Dentro de transaccion(async () => …) todas las consultas usan la transacción automáticamente.
+// ---------------------------------------------------------------------
+const contexto = new AsyncLocalStorage();
+const ejecutor = async () => contexto.getStore() || obtenerCliente();
+const limpiarArgs = (args) => (args.length === 1 && Array.isArray(args[0]) ? args[0] : args).map((v) => (v === undefined ? null : v));
+const aObjetos = (rs) => rs.rows.map((fila) => Object.fromEntries(rs.columns.map((c, i) => [c, fila[i]])));
+const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
+const esOcupado = (e) => /SQLITE_BUSY|database is locked/i.test(`${e?.code || ''} ${e?.message || ''}`);
+
+// Candado de escritura dentro de este proceso: las transacciones y escrituras se hacen de una en una
+// (en modo local evita choques entre conexiones; en Turso reduce reintentos).
+let cola = Promise.resolve();
+function tomarCandado() {
+  let liberar;
+  const turno = new Promise((r) => { liberar = r; });
+  const anterior = cola;
+  cola = cola.then(() => turno);
+  return anterior.then(() => liberar);
+}
+
+async function conReintentos(fn) {
+  for (let intento = 1; ; intento++) {
+    try { return await fn(); } catch (e) {
+      if (!esOcupado(e) || intento >= 8) throw e;
+      await dormir(60 * intento + Math.random() * 60);
+    }
+  }
+}
+
+class Sentencia {
+  constructor(sql) { this.sql = sql; }
+  async all(...args) { return aObjetos(await (await ejecutor()).execute({ sql: this.sql, args: limpiarArgs(args) })); }
+  async get(...args) { return (await this.all(...args))[0]; }
+  async run(...args) {
+    const ejecutar = async () => {
+      const rs = await (await ejecutor()).execute({ sql: this.sql, args: limpiarArgs(args) });
+      return { changes: rs.rowsAffected, lastInsertRowid: rs.lastInsertRowid === undefined ? undefined : Number(rs.lastInsertRowid) };
+    };
+    if (contexto.getStore()) return ejecutar();          // ya está dentro de una transacción
+    const liberar = await tomarCandado();
+    try { return await conReintentos(ejecutar); } finally { liberar(); }
+  }
+}
+
+export const db = {
+  prepare: (sql) => new Sentencia(sql),
+  /** Varias sentencias en un solo envío, todo o nada (útil en Turso: una sola petición de red). */
+  async lote(sentencias) {
+    const liberar = await tomarCandado();
+    try {
+      const c = await obtenerCliente();
+      return await conReintentos(() => c.batch(sentencias.map(([sql, args = []]) => ({ sql, args: limpiarArgs(args) })), 'write'));
+    } finally { liberar(); await prepararConexionLocal(); }
+  },
+  cerrar: async () => (await obtenerCliente()).close(),
+};
+
+/** Ejecuta `fn` fuera de la transacción actual (para tareas que siguen después del commit, como enviar correos). */
+export const fueraDeTransaccion = (fn) => contexto.exit(fn);
+
+/**
+ * Ejecuta `fn` en una transacción de escritura (BEGIN IMMEDIATE): evita vender de más (RNF-3 CA2) y deja los
+ * folios consecutivos. Si ya hay una transacción en curso, `fn` se vuelve parte de ella.
+ */
+export async function transaccion(fn) {
+  if (contexto.getStore()) return fn();
+  const liberar = await tomarCandado();
+  try {
+    const c = await obtenerCliente();
+    const tx = await conReintentos(() => c.transaction('write'));
+    await prepararConexionLocal(); // la conexión nueva que quedó para las consultas sueltas
+    try {
+      const r = await contexto.run(tx, fn);
+      await tx.commit();
+      return r;
+    } catch (e) {
+      try { await tx.rollback(); } catch { /* ya cerrada */ }
+      throw e;
+    } finally { tx.close(); }
+  } finally { liberar(); }
+}
 
 // ---------------------------------------------------------------------
 // Esquema relacional (RNF-4 CA1). Una sola fuente de verdad para tienda y panel.
 // Dinero en CENTAVOS (enteros) para evitar errores de redondeo (RN-19, MXN).
 // ---------------------------------------------------------------------
-db.exec(`
+const ESQUEMA = `
 CREATE TABLE IF NOT EXISTS usuarios (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   nombres TEXT NOT NULL,
@@ -257,6 +366,14 @@ CREATE TABLE IF NOT EXISTS movimientos_inventario (
   referencia TEXT
 );
 
+-- Fotos subidas desde el panel. Viven en la base de datos (no en el disco) para que todas las copias del servidor las vean.
+CREATE TABLE IF NOT EXISTS archivos (
+  nombre TEXT PRIMARY KEY,
+  tipo TEXT NOT NULL,
+  datos BLOB NOT NULL,
+  creado_en TEXT NOT NULL
+);
+
 -- Correos "enviados" (simulados o reales): comprobantes, avisos al administrador, cambios de estatus...
 CREATE TABLE IF NOT EXISTS correos (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -267,7 +384,22 @@ CREATE TABLE IF NOT EXISTS correos (
   adjunto TEXT,
   estado_envio TEXT NOT NULL DEFAULT 'simulado'
 );
-`);
+`;
+
+let listo = null;
+/** Crea las tablas (si faltan) y configura la conexión. Se llama una vez; las peticiones esperan a que termine. */
+export function iniciarBD() {
+  if (!listo) {
+    listo = (async () => {
+      const c = await obtenerCliente();
+      await prepararConexionLocal();
+      if (!remoto) await c.execute('PRAGMA journal_mode = WAL');
+      await conReintentos(() => c.executeMultiple(ESQUEMA));
+    })().catch((e) => { listo = null; throw e; }); // si falla (p. ej. sin red), la siguiente petición reintenta
+  }
+  return listo;
+}
+
 
 // ---------------------------------------------------------------------
 // Utilidades de dinero, fechas y folios
@@ -281,31 +413,31 @@ export const aPesos = (centavos) => Math.round(centavos) / 100;
 /** RN-5: parte de IVA contenida en un monto que ya lo incluye (16 %). */
 export const ivaIncluido = (centavos, pct = 16) => Math.round((centavos * pct) / (100 + pct));
 
-export function config_(clave, porDefecto = null) {
-  const f = db.prepare('SELECT valor FROM configuracion WHERE clave = ?').get(clave);
+export async function config_(clave, porDefecto = null) {
+  const f = await db.prepare('SELECT valor FROM configuracion WHERE clave = ?').get(clave);
   return f ? f.valor : porDefecto;
 }
-export const configNum = (clave, porDefecto = 0) => Number(config_(clave, porDefecto));
-export function guardarConfig(clave, valor) {
-  db.prepare('INSERT INTO configuracion(clave, valor) VALUES(?, ?) ON CONFLICT(clave) DO UPDATE SET valor = excluded.valor').run(clave, String(valor));
+export const configNum = async (clave, porDefecto = 0) => Number(await config_(clave, porDefecto));
+/** Toda la configuración en una sola consulta: { clave: valor }. */
+export async function configuracion() {
+  return Object.fromEntries((await db.prepare('SELECT clave, valor FROM configuracion').all()).map((f) => [f.clave, f.valor]));
+}
+/** Lee un número de un objeto de configuración ya cargado. */
+export const num = (cfg, clave, porDefecto = 0) => Number(cfg[clave] ?? porDefecto);
+export async function guardarConfig(clave, valor) {
+  await db.prepare('INSERT INTO configuracion(clave, valor) VALUES(?, ?) ON CONFLICT(clave) DO UPDATE SET valor = excluded.valor').run(clave, String(valor));
 }
 
 /** RN-20: folio único y consecutivo. Debe llamarse dentro de una transacción. */
-export function siguienteFolio(tipo) {
+export async function siguienteFolio(tipo) {
   const prefijo = tipo === 'pedido' ? 'PED' : 'FAC';
-  db.prepare('INSERT INTO folios(tipo, ultimo) VALUES(?, 0) ON CONFLICT(tipo) DO NOTHING').run(tipo);
-  db.prepare('UPDATE folios SET ultimo = ultimo + 1 WHERE tipo = ?').run(tipo);
-  const { ultimo } = db.prepare('SELECT ultimo FROM folios WHERE tipo = ?').get(tipo);
+  await db.prepare('INSERT INTO folios(tipo, ultimo) VALUES(?, 0) ON CONFLICT(tipo) DO NOTHING').run(tipo);
+  const { ultimo } = await db.prepare('UPDATE folios SET ultimo = ultimo + 1 WHERE tipo = ? RETURNING ultimo').get(tipo);
   return `${prefijo}-${String(ultimo).padStart(6, '0')}`;
 }
 
-/** Ejecuta `fn` en una transacción con bloqueo de escritura inmediato (evita vender de más, RNF-3 CA2). */
-export function transaccion(fn) {
-  return db.transaction(fn).immediate();
-}
-
-export function registrarMovimiento({ usuarioId = null, productoId, tipo, cantidad, resultante, referencia = null }) {
-  db.prepare(
+export async function registrarMovimiento({ usuarioId = null, productoId, tipo, cantidad, resultante, referencia = null }) {
+  await db.prepare(
     `INSERT INTO movimientos_inventario(fecha, usuario_id, producto_id, tipo, cantidad, existencias_resultantes, referencia)
      VALUES(?,?,?,?,?,?,?)`
   ).run(ahora(), usuarioId, productoId, tipo, cantidad, resultante, referencia);
